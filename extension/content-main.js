@@ -478,9 +478,22 @@
     sendStatus();
   }
 
+  // YouTube Music reports some playback failures only as a toast at the bottom
+  // ("No se admite este formato de vídeo" / "This video format is not supported"),
+  // and the <video> may sit paused meanwhile: treat those as errors too.
+  const FORMAT_ERROR = /formato de v[ií]deo|video format|format (?:is )?not supported|unsupported format/i;
+
   function isErrorVisible(player) {
     const el = player.querySelector('.ytp-error');
-    return Boolean(el && el.textContent && el.textContent.trim());
+    if (el && el.textContent && el.textContent.trim()) return true;
+    const video = player.querySelector('video');
+    // 3 = decode error, 4 = source/format not supported.
+    if (video?.error && (video.error.code === 3 || video.error.code === 4)) return true;
+    for (const toast of document.querySelectorAll('tp-yt-paper-toast, ytmusic-notification-text-renderer, yt-notification-action-renderer')) {
+      const b = toast.getBoundingClientRect();
+      if (b.width > 0 && b.height > 0 && FORMAT_ERROR.test(toast.textContent || '')) return true;
+    }
+    return false;
   }
 
   function watchPlayback(player) {
@@ -1162,6 +1175,7 @@
   // Test hook for the bundled Node test (absent in a real browser page).
   if (globalThis.__YTM_AO_TEST__) {
     globalThis.__YTM_AO_TEST__.api = {
+      isErrorVisible,
       pickBestAudio, pickCheapestVideo, patchAny, trackInfo, LEVEL,
       getConfig: () => config, applyConfig, effectiveLevel, artCandidates, artShape, hidePremium, isLight, trackText, artworkFor, pickAccent, smallArt, updateHero, hero, fmtTime,
     };
