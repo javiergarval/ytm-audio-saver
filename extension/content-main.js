@@ -486,9 +486,8 @@
   function isErrorVisible(player) {
     const el = player.querySelector('.ytp-error');
     if (el && el.textContent && el.textContent.trim()) return true;
-    const video = player.querySelector('video');
-    // 3 = decode error, 4 = source/format not supported.
-    if (video?.error && (video.error.code === 3 || video.error.code === 4)) return true;
+    // Not video.error: YouTube clears the src between tracks, which leaves a stale
+    // 'format not supported' error on the element and caused false reloads (1.0.11).
     for (const toast of document.querySelectorAll('tp-yt-paper-toast, ytmusic-notification-text-renderer, yt-notification-action-renderer')) {
       const b = toast.getBoundingClientRect();
       if (b.width > 0 && b.height > 0 && FORMAT_ERROR.test(toast.textContent || '')) return true;
