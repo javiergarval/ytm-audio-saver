@@ -1,0 +1,97 @@
+# Sign & release
+# ---------------------------------------------------------------------------
+# On every push that changes extension/ with a NEW version in manifest.json:
+#   1. Mozilla signs the extension (unlisted / self-distributed) using the
+#      repo secrets AMO_API_KEY and AMO_API_SECRET.
+#   2. The signed .xpi is published as a GitHub Release (vX.Y.Z).
+#   3. updates.json is rewritten to point at it. Firefox/Zen read that file
+#      (manifest "update_url") and install the new version on their own.
+# Pushing without bumping the version does nothing (the release already exists).
+name: Sign & release
+
+on:
+  push:
+    branches: [main]
+    paths: ["extension/**"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read version and add-on ID
+        id: meta
+        run: |
+          echo "version=$(jq -r .version extension/manifest.json)" >> "$GITHUB_OUTPUT"
+          echo "addon_id=$(jq -r .browser_specific_settings.gecko.id extension/manifest.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Skip if this version is already released
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          if gh release view "v$VERSION" >/dev/null 2>&1; then
+            echo "v$VERSION already released. Bump \"version\" in extension/manifest.json to publish."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check Mozilla keys are configured
+        if: steps.check.outputs.skip == 'false'
+        env:
+          KEY: ${{ secrets.AMO_API_KEY }}
+          SECRET: ${{ secrets.AMO_API_SECRET }}
+        run: |
+          if [ -z "$KEY" ] || [ -z "$SECRET" ]; then
+            echo "::error::Add the secrets AMO_API_KEY and AMO_API_SECRET (Settings > Secrets and variables > Actions), then re-run."
+            exit 1
+          fi
+
+      - uses: actions/setup-node@v4
+        if: steps.check.outputs.skip == 'false'
+        with:
+          node-version: 22
+
+      - name: Sign with Mozilla (unlisted)
+        if: steps.check.outputs.skip == 'false'
+        env:
+          WEB_EXT_API_KEY: ${{ secrets.AMO_API_KEY }}
+          WEB_EXT_API_SECRET: ${{ secrets.AMO_API_SECRET }}
+        run: npx --yes web-ext@8 sign --channel=unlisted --source-dir extension --artifacts-dir dist
+
+      - name: Publish release and update manifest
+        if: steps.check.outputs.skip == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.meta.outputs.version }}
+          ADDON_ID: ${{ steps.meta.outputs.addon_id }}
+          REPO: ${{ github.repository }}
+        run: |
+          XPI="ytm-audio-saver-$VERSION.xpi"
+          mv dist/*.xpi "dist/$XPI"
+          HASH="sha256:$(sha256sum "dist/$XPI" | cut -d' ' -f1)"
+
+          gh release create "v$VERSION" "dist/$XPI" \
+            --title "v$VERSION" \
+            --notes "Signed by Mozilla (self-distributed). Installed copies update automatically; to install the first time, open the .xpi below in Firefox or Zen."
+
+          URL="https://github.com/$REPO/releases/download/v$VERSION/$XPI"
+          jq -n --arg id "$ADDON_ID" --arg v "$VERSION" --arg url "$URL" --arg hash "$HASH" \
+            '{addons: {($id): {updates: [{version: $v, update_link: $url, update_hash: $hash}]}}}' > updates.json
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add updates.json
+          git commit -m "updates.json: v$VERSION [skip ci]"
+          git push
