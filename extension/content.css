@@ -564,3 +564,52 @@ html.ytm-ao-ambient.ytm-ao-ambient tp-yt-paper-listbox {
 @media (prefers-reduced-transparency: reduce) {
   html.ytm-ao-ambient { --ao-glass: var(--ao-surface); --ao-glass-strong: var(--ao-surface); }
 }
+
+/* ===========================================================================
+ * LIGHT MODE COVERAGE
+ * YouTube Music only ships a dark theme, so many components hardcode white
+ * text (menus, account panel, tabs, dialogs). In light mode, every text
+ * element is pinned to our dark text color; secondary text to the muted one.
+ * =========================================================================== */
+html.ytm-ao-clean.ytm-ao-light ytmusic-app yt-formatted-string,
+html.ytm-ao-clean.ytm-ao-light ytmusic-app yt-attributed-string,
+html.ytm-ao-clean.ytm-ao-light ytmusic-app .ytAttributedStringHost,
+html.ytm-ao-clean.ytm-ao-light ytmusic-app yt-formatted-string a.yt-simple-endpoint,
+html.ytm-ao-clean.ytm-ao-light ytmusic-app tp-yt-paper-item,
+html.ytm-ao-clean.ytm-ao-light ytmusic-app .tab-content,
+html.ytm-ao-clean.ytm-ao-light tp-yt-paper-dialog yt-formatted-string,
+html.ytm-ao-clean.ytm-ao-light tp-yt-paper-dialog .ytAttributedStringHost {
+  color: var(--ao-text) !important;
+}
+html.ytm-ao-clean.ytm-ao-light ytmusic-app yt-formatted-string.subtitle,
+html.ytm-ao-clean.ytm-ao-light ytmusic-app yt-formatted-string.byline,
+html.ytm-ao-clean.ytm-ao-light ytmusic-app yt-formatted-string.secondary,
+html.ytm-ao-clean.ytm-ao-light ytmusic-app yt-formatted-string.strapline,
+html.ytm-ao-clean.ytm-ao-light ytmusic-app yt-formatted-string.duration,
+html.ytm-ao-clean.ytm-ao-light ytmusic-app .subtitle yt-formatted-string,
+html.ytm-ao-clean.ytm-ao-light ytmusic-app .byline a.yt-simple-endpoint,
+html.ytm-ao-clean.ytm-ao-light ytmusic-app .secondary-flex-columns yt-formatted-string,
+html.ytm-ao-clean.ytm-ao-light ytmusic-player-page tp-yt-paper-tab:not(.iron-selected) .tab-content {
+  color: var(--ao-muted) !important;
+}
+/* Links meant to stand out (e.g. "Manage your Google Account") keep their color. */
+html.ytm-ao-clean.ytm-ao-light ytmusic-app a[href*="myaccount.google.com"],
+html.ytm-ao-clean.ytm-ao-light ytmusic-app a[href*="myaccount.google.com"] * {
+  color: #1a73e8 !important;
+}
+/* The one place text sits on the accent color: selected chip. */
+html.ytm-ao-ambient.ytm-ao-light ytmusic-chip-cloud-chip-renderer[is-selected] a.yt-simple-endpoint,
+html.ytm-ao-ambient.ytm-ao-light ytmusic-chip-cloud-chip-renderer[is-selected] yt-formatted-string {
+  color: #fff !important;
+}
+html.ytm-ao-clean.ytm-ao-light:not(.ytm-ao-ambient) ytmusic-chip-cloud-chip-renderer[is-selected] yt-formatted-string {
+  color: var(--ao-bg) !important;
+}
+/* Account panel / menus: solid light card with a hairline border. */
+html.ytm-ao-clean.ytm-ao-light ytmusic-multi-page-menu-renderer,
+html.ytm-ao-clean.ytm-ao-light ytmusic-menu-popup-renderer,
+html.ytm-ao-clean.ytm-ao-light tp-yt-paper-listbox,
+html.ytm-ao-clean.ytm-ao-light tp-yt-paper-dialog {
+  background: var(--ao-surface) !important;
+  color: var(--ao-text) !important;
+}
