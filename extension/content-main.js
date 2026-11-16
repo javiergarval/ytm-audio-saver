@@ -950,41 +950,55 @@
     return null;
   }
 
-  const CONTENT_ROWS = 'ytmusic-chip-cloud-renderer, ytmusic-carousel-shelf-renderer, ytmusic-grid-renderer, '
-    + 'ytmusic-shelf-renderer, ytmusic-immersive-carousel-shelf-renderer, ytmusic-section-list-renderer #contents > *';
+  // What the user actually sees lined up: cards, chips, buttons and shelf headers.
+  const COLUMN_ITEMS = 'ytmusic-two-row-item-renderer, ytmusic-navigation-button-renderer, '
+    + 'ytmusic-chip-cloud-chip-renderer, ytmusic-responsive-list-item-renderer, '
+    + 'ytmusic-carousel-shelf-basic-header-renderer, ytmusic-tastebuilder-shelf-renderer';
+  const SHELF_HEADERS = 'ytmusic-carousel-shelf-basic-header-renderer';
 
-  /** Left/right edges of the real content column (where the cards start), in page coordinates. */
+  /** Most common value (within `tol` px) among numbers; null if none repeats. */
+  function modeOf(values, tol = 6) {
+    let best = null, bestCount = 1;
+    for (const v of values) {
+      const n = values.filter((o) => Math.abs(o - v) <= tol).length;
+      if (n > bestCount || (n === bestCount && best !== null && v < best)) { best = v; bestCount = n; }
+    }
+    return best;
+  }
+
+  /**
+   * Left/right edges of the content column, in page coordinates.
+   * Left = the x where most rows start (the first card of every row, chips,
+   * buttons and shelf titles share it). Measuring containers proved unreliable:
+   * some are full-bleed (Explore), some narrower than the column (Library).
+   */
   function contentEdges(browse, rect) {
-    // The column edge is the left edge most rows share. Single rows can be narrower
-    // (Library's filter chips sit next to a sort dropdown) or wider (full-bleed
-    // carousels on Explore), so neither the first row nor the union is reliable.
-    const rows = [];
-    for (const row of browse.querySelectorAll(CONTENT_ROWS)) {
-      const b = row.getBoundingClientRect();
-      if (b.width < 300 || b.height <= 0) continue;
-      rows.push(b);
-      if (rows.length >= 10) break;
+    const guide = document.getElementById('guide-wrapper') || document.getElementById('guide');
+    const g = guide?.getBoundingClientRect();
+    const guideRight = g && g.width > 0 && g.right > 0 && g.right < innerWidth / 2 ? g.right : 0;
+
+    const lefts = [];
+    for (const el of browse.querySelectorAll(COLUMN_ITEMS)) {
+      const b = el.getBoundingClientRect();
+      if (b.width <= 0 || b.height <= 0 || b.left < guideRight || b.left > innerWidth * 0.6) continue;
+      lefts.push(b.left);
+      if (lefts.length >= 200) break;
     }
-    let left = null, right = null;
-    if (rows.length) {
-      let best = rows[0].left, bestCount = 0;
-      for (const r of rows) {
-        const n = rows.filter((o) => Math.abs(o.left - r.left) < 12).length;
-        if (n > bestCount) { best = r.left; bestCount = n; }
-      }
-      const same = rows.filter((o) => Math.abs(o.left - best) < 12);
-      left = Math.min(...same.map((o) => o.left));
-      right = Math.max(...same.map((o) => o.right));
-    }
+    let left = modeOf(lefts);
     if (left === null) {
       const cs = getComputedStyle(browse);
       left = rect.left + Math.max(parseFloat(cs.paddingLeft) || 0, 24);
-      right = rect.right - Math.max(parseFloat(cs.paddingRight) || 0, 24);
     }
-    // Never sit on top of the side menu (Home / Explore / Library).
-    const guide = document.getElementById('guide-wrapper') || document.getElementById('guide');
-    const g = guide?.getBoundingClientRect();
-    if (g && g.width > 0 && g.right > 0 && g.right < innerWidth / 2) left = Math.max(left, g.right + 24);
+    left = Math.max(left, guideRight + 24);
+
+    // Right: shelf headers span the column exactly (title … "Más" + arrows).
+    const rights = [...browse.querySelectorAll(SHELF_HEADERS)]
+      .map((el) => el.getBoundingClientRect())
+      .filter((b) => b.width > 300 && b.height > 0 && Math.abs(b.left - left) <= 12)
+      .map((b) => b.right);
+    let right = modeOf(rights, 6) ?? (rights.length ? Math.max(...rights) : null);
+    // Fallback: the column is centred, so mirror the left margin.
+    if (right === null) right = innerWidth - Math.max(24, left - guideRight);
     return { left: left + window.scrollX, width: Math.max(320, right - left) };
   }
 
