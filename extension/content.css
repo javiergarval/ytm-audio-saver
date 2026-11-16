@@ -100,9 +100,9 @@ html.ytm-ao-style:not(.ytm-ao-ad) ytmusic-player #song-image img[data-ytm-ao-sha
 
 /* ---- Design tokens -------------------------------------------------------- */
 html.ytm-ao-clean {
-  --ao-bg: #0b0b0e;
-  --ao-surface: #141418;
-  --ao-raised: #1c1c22;
+  --ao-bg: #0f0f0f;            /* = YouTube's fade-out color: header gradients blend seamlessly */
+  --ao-surface: #17171a;
+  --ao-raised: #1f1f23;
   --ao-hover: rgb(255 255 255 / 0.06);
   --ao-line: rgb(255 255 255 / 0.08);
   --ao-text: #f4f4f6;
@@ -140,6 +140,11 @@ html.ytm-ao-clean.ytm-ao-clean {
   --yt-sys-color-baseline--mono-tonal-hover: var(--ao-hover) !important;
   --yt-sys-color-baseline--button-chip-background-hover: var(--ao-hover) !important;
   --yt-sys-color-baseline--static-brand-red: var(--ao-accent) !important;
+  --yt-sys-color-baseline--scrim-background-gradient-5: var(--ao-bg) !important;
+  --yt-sys-color-baseline--scrim-background-gradient-4: color-mix(in srgb, var(--ao-bg) 90%, transparent) !important;
+  --yt-sys-color-baseline--scrim-background-gradient-3: color-mix(in srgb, var(--ao-bg) 60%, transparent) !important;
+  --yt-sys-color-baseline--scrim-background-gradient-2: color-mix(in srgb, var(--ao-bg) 30%, transparent) !important;
+  --yt-sys-color-baseline--scrim-background-gradient-1: transparent !important;
   --yt-sys-color-baseline--red-indicator: var(--ao-accent) !important;
   --yt-primary-text-color: var(--ao-text) !important;
   --yt-endpoint-hover-color: var(--ao-text) !important;
@@ -177,10 +182,8 @@ html.ytm-ao-clean #guide-wrapper {
   border-color: var(--ao-line) !important;
 }
 /* Page-tinted gradients behind Home/artist pages: keep it calm and flat. */
-html.ytm-ao-clean ytmusic-browse-response #background,
-html.ytm-ao-clean ytmusic-fullbleed-thumbnail-renderer {
-  opacity: 0.35;
-}
+html.ytm-ao-clean ytmusic-browse-response #background { opacity: 0.6; }
+html.ytm-ao-clean.ytm-ao-light ytmusic-browse-response #background { display: none !important; }
 html.ytm-ao-clean #mini-guide-background { border-right: 0 !important; }
 
 /* ---- Top bar [verified] ---------------------------------------------------- */
@@ -258,8 +261,6 @@ html.ytm-ao-clean ytmusic-shelf-renderer h2 .title {
   letter-spacing: -0.01em !important;
 }
 html.ytm-ao-clean ytmusic-carousel-shelf-basic-header-renderer .strapline { color: var(--ao-muted) !important; }
-/* Spacious rhythm between sections. */
-html.ytm-ao-clean ytmusic-carousel-shelf-renderer { margin-bottom: 40px !important; }
 /* Cards: gentle lift on hover. */
 html.ytm-ao-clean ytmusic-two-row-item-renderer {
   transition: transform 0.18s ease;
