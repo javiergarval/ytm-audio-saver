@@ -11,13 +11,16 @@ audio format, and shows an album-art player instead of the video. Works in Firef
 | Network block | `background.js` | Cancels `googlevideo.com/videoplayback?…mime=video/…` requests coming from music.youtube.com tabs. Audio requests are never touched. |
 | UI | `content.css` + `content-main.js` | Hides `#song-video`, shows `#song-image` filled with the sharpest artwork available. **Album-art player** (on by default, switch in popup → Advanced): centered art with rounded corners over a blurred copy of itself. Nothing is hidden during ads, so "Skip" stays clickable. |
 
-### Clean design (popup → Advanced)
-- **Clean design**: calmer, simpler YouTube Music: refined colors, smaller section titles,
-  pill-shaped filters and search, rounded player and queue, accent-colored progress bar.
-  Removes the Premium "Upgrade" entry and upsells, hint bubbles and the
-  "new recommendations" chip.
-- **Theme**: Auto (follows macOS light/dark), Dark or Light.
-- **Album-art player**: the square album cover, sharp, over a blurred copy of itself.
+### Design (popup → Advanced)
+- **Ambient** (default): the window takes the colors of the song playing. A huge blurred
+  copy of the cover fills the background, the accent color is picked from the artwork,
+  and the top bar, player bar and queue float above it as frosted glass.
+- **Clean**: calm, flat and simple.
+- **Off**: YouTube Music's original look.
+- Ambient and Clean both remove the Premium "Upgrade" entry and upsells, hint bubbles and
+  the "new recommendations" chip, and follow macOS light/dark (or force Dark/Light).
+- **Album-art player**: the square album cover, sharp, instead of the video.
+- **Now Playing**: cover, title, position and previous/next in the macOS menu bar.
 
 ### Self-healing modes
 Some player builds stall when video is missing, so the extension learns which mode works:

@@ -51,9 +51,10 @@
   const LEVEL = Object.freeze({ STRICT: 0, BLOCK: 1, MINIMAL: 2 });
   const LEVEL_NAMES = ['strict', 'block', 'minimal'];
   const DEFAULT_CONFIG = Object.freeze({
-    enabled: true, level: LEVEL.STRICT, autoLearn: true, restyle: true, clean: true, theme: 'auto',
+    enabled: true, level: LEVEL.STRICT, autoLearn: true, restyle: true, design: 'ambient', theme: 'auto',
   });
   const THEMES = ['auto', 'dark', 'light'];
+  const DESIGNS = ['ambient', 'clean', 'off'];
 
   // Audio itag preference. 774 (Opus ~256k) and 141 (AAC 256k) are Premium-only:
   // they never appear for free accounts, they are listed so the order stays correct
@@ -114,7 +115,8 @@
       level: clampLevel(src.level ?? DEFAULT_CONFIG.level),
       autoLearn: typeof src.autoLearn === 'boolean' ? src.autoLearn : DEFAULT_CONFIG.autoLearn,
       restyle: typeof src.restyle === 'boolean' ? src.restyle : DEFAULT_CONFIG.restyle,
-      clean: typeof src.clean === 'boolean' ? src.clean : DEFAULT_CONFIG.clean,
+      // 'design' replaced the old on/off 'clean' setting: keep an explicit "off".
+      design: DESIGNS.includes(src.design) ? src.design : (src.clean === false ? 'off' : DEFAULT_CONFIG.design),
       theme: THEMES.includes(src.theme) ? src.theme : DEFAULT_CONFIG.theme,
     };
   }
@@ -628,6 +630,79 @@
   // ---------------------------------------------------------------------------
   // Clean design helpers: theme and Premium/upgrade removal
   // ---------------------------------------------------------------------------
+  const designOn = () => config.enabled && config.design !== 'off';
+
+  // ---- Ambient: the window takes the colors of the current cover ----------
+  const ambient = { url: null };
+
+  /** A small copy is plenty for a 80px blur and for color sampling. */
+  function smallArt(url, vid) {
+    if (/googleusercontent\.com/.test(url) && /=w\d+-h\d+/.test(url)) return url.replace(/=w\d+-h\d+/, '=w240-h240');
+    return vid ? `https://i.ytimg.com/vi/${encodeURIComponent(vid)}/mqdefault.jpg` : url;
+  }
+
+  const rgbToHsl = (r, g, b) => {
+    r /= 255; g /= 255; b /= 255;
+    const max = Math.max(r, g, b), min = Math.min(r, g, b), l = (max + min) / 2;
+    if (max === min) return [0, 0, l];
+    const d = max - min, s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    const h = max === r ? (g - b) / d + (g < b ? 6 : 0) : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+    return [h * 60, s, l];
+  };
+
+  /**
+   * Most "vivid" color family of the cover: pixels are grouped into 12 hue
+   * buckets weighted by saturation x brightness, the heaviest bucket wins.
+   * Returns [hue, saturation] or null (grey covers, or images without CORS).
+   */
+  function pickAccent(pixels) {
+    const buckets = Array.from({ length: 12 }, () => ({ w: 0, h: 0, s: 0 }));
+    for (let i = 0; i < pixels.length; i += 4) {
+      const [h, s, l] = rgbToHsl(pixels[i], pixels[i + 1], pixels[i + 2]);
+      const v = Math.max(pixels[i], pixels[i + 1], pixels[i + 2]) / 255;
+      if (s < 0.25 || v < 0.2 || l > 0.92) continue;
+      const w = s * v, b = buckets[Math.floor(h / 30) % 12];
+      b.w += w; b.h += h * w; b.s += s * w;
+    }
+    const best = buckets.reduce((a, b) => (b.w > a.w ? b : a));
+    return best.w > 0.5 ? [best.h / best.w, best.s / best.w] : null;
+  }
+
+  function extractAccent(url) {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        try {
+          const c = document.createElement('canvas');
+          c.width = c.height = 32;
+          const g = c.getContext('2d', { willReadFrequently: true });
+          g.drawImage(img, 0, 0, 32, 32);
+          resolve(pickAccent(g.getImageData(0, 0, 32, 32).data));
+        } catch { resolve(null); } // canvas tainted: no CORS on this image host
+      };
+      img.onerror = () => resolve(null);
+      img.src = url;
+    });
+  }
+
+  function applyAmbient() {
+    const root = document.documentElement;
+    if (!root || !designOn() || config.design !== 'ambient') return;
+    const url = art.vid === state.videoId ? art.url : null;
+    if (!url || url === ambient.url) return;
+    ambient.url = url;
+    const small = smallArt(url, art.vid);
+    root.style.setProperty('--ao-art', `url("${small.replace(/"/g, '%22')}")`);
+    extractAccent(small).then((hs) => {
+      if (ambient.url !== url) return;
+      if (!hs) { root.style.removeProperty('--ao-accent-dark'); root.style.removeProperty('--ao-accent-light'); return; }
+      const h = Math.round(hs[0]), s = Math.round(Math.min(0.9, Math.max(0.55, hs[1])) * 100);
+      root.style.setProperty('--ao-accent-dark', `hsl(${h} ${s}% 64%)`);   // readable on dark
+      root.style.setProperty('--ao-accent-light', `hsl(${h} ${s}% 42%)`);  // readable on light
+    });
+  }
+
   const lightQuery = window.matchMedia ? window.matchMedia('(prefers-color-scheme: light)') : null;
   const isLight = () => config.theme === 'light' || (config.theme === 'auto' && Boolean(lightQuery?.matches));
   lightQuery?.addEventListener?.('change', () => setRootClasses());
@@ -645,7 +720,7 @@
   const checked = new WeakMap(); // element -> data object it was checked against
 
   function hidePremium(root = document) {
-    if (!config.enabled || !config.clean) return;
+    if (!designOn()) return;
     for (const el of root.querySelectorAll(PREMIUM_CANDIDATES)) {
       const data = el.data ?? el.__data?.data ?? null;
       if (!data || checked.get(el) === data) continue;
@@ -743,8 +818,9 @@
     if (!root) return;
     root.classList.toggle('ytm-ao-on', config.enabled);
     root.classList.toggle('ytm-ao-style', config.enabled && config.restyle);
-    root.classList.toggle('ytm-ao-clean', config.enabled && config.clean);
-    root.classList.toggle('ytm-ao-light', config.enabled && config.clean && isLight());
+    root.classList.toggle('ytm-ao-clean', designOn());
+    root.classList.toggle('ytm-ao-ambient', designOn() && config.design === 'ambient');
+    root.classList.toggle('ytm-ao-light', designOn() && isLight());
     root.classList.toggle('ytm-ao-ad', state.ad);
   }
 
@@ -783,7 +859,7 @@
 
     syncAllow();
     watchPlayback(player); // first: playback recovery must never depend on cosmetics
-    try { updateArt(player); } catch (e) { log('artwork update failed', e); }
+    try { updateArt(player); applyAmbient(); } catch (e) { log('artwork update failed', e); }
     try { hidePremium(); observePopups(); } catch (e) { log('clean-up failed', e); }
     try { updateMediaSession(player, player.querySelector('video')); } catch (e) { log('media session failed', e); }
     if (state.ticks % STATUS_EVERY_S === 0) sendStatus();
@@ -844,7 +920,7 @@
   if (globalThis.__YTM_AO_TEST__) {
     globalThis.__YTM_AO_TEST__.api = {
       pickBestAudio, pickCheapestVideo, patchAny, trackInfo, LEVEL,
-      getConfig: () => config, applyConfig, effectiveLevel, artCandidates, artShape, hidePremium, isLight, trackText, artworkFor,
+      getConfig: () => config, applyConfig, effectiveLevel, artCandidates, artShape, hidePremium, isLight, trackText, artworkFor, pickAccent, smallArt,
     };
   }
 })();

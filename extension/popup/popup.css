@@ -115,3 +115,4 @@ dd.warn { color: var(--warn); }
 
 .seg-theme { margin: 8px 0 10px; }
 .seg.disabled { opacity: 0.45; pointer-events: none; }
+.label { font-size: 12px; color: var(--muted); margin: 12px 0 6px; }

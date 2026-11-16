@@ -36,10 +36,13 @@
     </div>
     <p class="muted" id="mode-desc"></p>
 
-    <label class="check">
-      <input type="checkbox" id="clean">
-      <span>Clean design (hides Premium upsells)</span>
-    </label>
+    <p class="label">Design</p>
+    <div class="seg seg-design" role="radiogroup" aria-label="Design">
+      <label><input type="radio" name="design" value="ambient"><span>Ambient</span></label>
+      <label><input type="radio" name="design" value="clean"><span>Clean</span></label>
+      <label><input type="radio" name="design" value="off"><span>Off</span></label>
+    </div>
+    <p class="muted" id="design-desc"></p>
 
     <div class="seg seg-theme" role="radiogroup" aria-label="Theme">
       <label><input type="radio" name="theme" value="auto"><span>Auto</span></label>

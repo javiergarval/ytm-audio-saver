@@ -17,7 +17,7 @@
   const api = typeof browser !== 'undefined' ? browser : chrome;
   const MSG_FROM_MAIN = 'ytm-ao-main';
   const MSG_FROM_BRIDGE = 'ytm-ao-bridge';
-  const DEFAULTS = { enabled: true, level: 0, autoLearn: true, restyle: true, clean: true, theme: 'auto' };
+  const DEFAULTS = { enabled: true, level: 0, autoLearn: true, restyle: true, clean: true, design: 'ambient', theme: 'auto' };
   const KEYS = Object.keys(DEFAULTS);
 
   const toPage = (type, payload = {}) =>
@@ -32,7 +32,10 @@
 
   async function pushConfig() {
     try {
-      const cfg = await api.storage.local.get(DEFAULTS);
+      const raw = await api.storage.local.get(null);
+      const cfg = { ...DEFAULTS, ...raw };
+      // Older versions stored an on/off "clean" switch: keep "off" if that's what was chosen.
+      if (!('design' in raw) && raw.clean === false) cfg.design = 'off';
       toPage('config', { config: Object.fromEntries(KEYS.map((k) => [k, cfg[k]])) });
     } catch { /* ignore */ }
   }

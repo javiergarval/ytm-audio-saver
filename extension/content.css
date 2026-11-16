@@ -383,3 +383,184 @@ html.ytm-ao-clean.ytm-ao-light ytmusic-responsive-list-item-renderer .title {
 }
 /* The YouTube Music logo is white text: give it a dark tint in light mode. */
 html.ytm-ao-clean.ytm-ao-light ytmusic-logo img.logo { filter: invert(1) hue-rotate(180deg); }
+
+/* ===========================================================================
+ * AMBIENT DESIGN (html.ytm-ao-ambient; popup → Advanced → Design: Ambient)
+ * Builds on the clean design: the window takes the colors of the current
+ * cover (blurred backdrop + accent picked from the artwork), and the chrome
+ * floats above it as frosted glass. Element names here are [verified].
+ * =========================================================================== */
+html.ytm-ao-ambient {
+  --ao-accent: var(--ao-accent-dark, #ff375f);
+  --ao-glass: rgb(16 16 20 / 0.5);
+  --ao-glass-strong: rgb(16 16 20 / 0.72);
+  --ao-glass-line: rgb(255 255 255 / 0.1);
+  --ao-veil: linear-gradient(180deg, rgb(0 0 0 / 0.2) 0%, rgb(0 0 0 / 0.5) 45%, rgb(0 0 0 / 0.72) 100%);
+  --ao-backdrop-filter: blur(80px) saturate(1.6) brightness(0.6);
+}
+html.ytm-ao-ambient.ytm-ao-light {
+  --ao-accent: var(--ao-accent-light, #e11d48);
+  --ao-glass: rgb(255 255 255 / 0.5);
+  --ao-glass-strong: rgb(255 255 255 / 0.74);
+  --ao-glass-line: rgb(0 0 0 / 0.08);
+  --ao-veil: linear-gradient(180deg, rgb(255 255 255 / 0.35) 0%, rgb(255 255 255 / 0.62) 50%, rgb(255 255 255 / 0.78) 100%);
+  --ao-backdrop-filter: blur(80px) saturate(1.3) brightness(1.1);
+}
+
+/* ---- The backdrop: current cover, hugely blurred, behind everything ------- */
+html.ytm-ao-ambient ytmusic-app::before,
+html.ytm-ao-ambient ytmusic-app::after {
+  content: "";
+  position: fixed;
+  pointer-events: none;
+  z-index: 0;
+}
+html.ytm-ao-ambient ytmusic-app::before {
+  inset: -15%;
+  background:
+    var(--ao-art, none) center / cover no-repeat,
+    radial-gradient(60% 50% at 20% 10%, color-mix(in srgb, var(--ao-accent) 45%, transparent), transparent 70%),
+    radial-gradient(50% 50% at 85% 80%, color-mix(in srgb, var(--ao-accent) 30%, transparent), transparent 70%),
+    var(--ao-bg);
+  filter: var(--ao-backdrop-filter);
+  transform: translateZ(0); /* keep the blur on the GPU, composited once */
+}
+/* Readability veil: darker (or lighter) towards the content and player bar. */
+html.ytm-ao-ambient ytmusic-app::after { inset: 0; background: var(--ao-veil); }
+
+/* Everything else sits above the backdrop and lets it show through. */
+html.ytm-ao-ambient.ytm-ao-ambient ytmusic-app-layout {
+  position: relative;
+  z-index: 1;
+  background: transparent !important;
+}
+html.ytm-ao-ambient.ytm-ao-ambient ytmusic-browse-response,
+html.ytm-ao-ambient.ytm-ao-ambient #mini-guide-background,
+html.ytm-ao-ambient.ytm-ao-ambient #guide-wrapper,
+html.ytm-ao-ambient.ytm-ao-ambient ytmusic-player-page {
+  background: transparent !important;
+}
+html.ytm-ao-ambient.ytm-ao-ambient ytmusic-browse-response #background { display: none !important; }
+
+/* ---- Top bar: frosted glass ------------------------------------------------ */
+html.ytm-ao-ambient.ytm-ao-ambient #nav-bar-background {
+  background: var(--ao-glass) !important;
+  backdrop-filter: blur(28px) saturate(1.5);
+  border-bottom: 1px solid var(--ao-glass-line) !important;
+}
+html.ytm-ao-ambient.ytm-ao-ambient ytmusic-search-box .search-box {
+  background: var(--ao-glass) !important;
+  border-color: var(--ao-glass-line) !important;
+  border-radius: 999px !important;
+  padding-left: 6px;
+}
+
+/* ---- Sidebar: icons on glass, active item glows in the accent ------------ */
+html.ytm-ao-ambient.ytm-ao-ambient ytmusic-guide-entry-renderer tp-yt-paper-item:hover {
+  background: var(--ao-glass) !important;
+}
+html.ytm-ao-ambient.ytm-ao-ambient ytmusic-guide-entry-renderer[active] tp-yt-paper-item {
+  background: color-mix(in srgb, var(--ao-accent) 18%, transparent) !important;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ao-accent) 35%, transparent);
+}
+
+/* ---- Content ------------------------------------------------------------- */
+html.ytm-ao-ambient.ytm-ao-ambient ytmusic-carousel-shelf-basic-header-renderer .title,
+html.ytm-ao-ambient.ytm-ao-ambient ytmusic-carousel-shelf-basic-header-renderer h2 {
+  font-size: 30px !important;
+  font-weight: 800 !important;
+  letter-spacing: -0.025em !important;
+}
+html.ytm-ao-ambient.ytm-ao-ambient ytmusic-chip-cloud-chip-renderer a.yt-simple-endpoint {
+  background: var(--ao-glass) !important;
+  border-color: var(--ao-glass-line) !important;
+  backdrop-filter: blur(16px);
+}
+html.ytm-ao-ambient.ytm-ao-ambient ytmusic-chip-cloud-chip-renderer[is-selected] a.yt-simple-endpoint,
+html.ytm-ao-ambient.ytm-ao-ambient ytmusic-chip-cloud-chip-renderer[chip-style="STYLE_PRIMARY"] a.yt-simple-endpoint {
+  background: var(--ao-accent) !important;
+  color: #fff !important;
+}
+html.ytm-ao-ambient.ytm-ao-ambient ytmusic-two-row-item-renderer:hover { transform: translateY(-4px) scale(1.015); }
+html.ytm-ao-ambient.ytm-ao-ambient ytmusic-navigation-button-renderer button {
+  background: var(--ao-glass) !important;
+  border-color: var(--ao-glass-line) !important;
+  backdrop-filter: blur(16px);
+}
+
+/* ---- Player bar: a floating glass capsule -------------------------------- */
+html.ytm-ao-ambient.ytm-ao-ambient ytmusic-player-bar {
+  left: 16px !important;
+  bottom: 14px !important;
+  width: calc(100% - 32px) !important;
+  border-radius: 22px !important;
+  background: var(--ao-glass-strong) !important;
+  backdrop-filter: blur(30px) saturate(1.6);
+  border: 1px solid var(--ao-glass-line) !important;
+  box-shadow: 0 18px 50px rgb(0 0 0 / 0.35);
+}
+html.ytm-ao-ambient.ytm-ao-ambient ytmusic-player-bar #progress-bar {
+  left: 24px !important;
+  width: calc(100% - 48px) !important;
+}
+html.ytm-ao-ambient.ytm-ao-ambient ytmusic-player-bar #progress-bar #progressContainer { border-radius: 2px; }
+html.ytm-ao-ambient.ytm-ao-ambient ytmusic-player-bar #progress-bar #primaryProgress {
+  box-shadow: 0 0 12px color-mix(in srgb, var(--ao-accent) 70%, transparent);
+}
+html.ytm-ao-ambient.ytm-ao-ambient ytmusic-player-bar img.image { border-radius: 10px !important; }
+/* The mini player floats just above the capsule. */
+html.ytm-ao-ambient.ytm-ao-ambient ytmusic-player-page[player-ui-state="MINIPLAYER"] { transform: translateY(-16px); }
+html.ytm-ao-ambient.ytm-ao-ambient ytmusic-player-page[player-ui-state="MINIPLAYER"] ytmusic-player#player {
+  border-radius: 18px;
+  border: 1px solid var(--ao-glass-line);
+}
+
+/* ---- Player page: the cover floats on the ambient backdrop ---------------- */
+html.ytm-ao-ambient.ytm-ao-ambient ytmusic-player-page[player-ui-state="PLAYER_PAGE_OPEN"] ytmusic-player#player {
+  overflow: visible;
+}
+html.ytm-ao-ambient.ytm-ao-ambient ytmusic-player-page[player-ui-state="PLAYER_PAGE_OPEN"] ytmusic-player #song-image {
+  background: transparent !important;
+  contain: none !important; /* let the cover's shadow spill out instead of being clipped */
+}
+html.ytm-ao-ambient.ytm-ao-ambient ytmusic-player-page[player-ui-state="PLAYER_PAGE_OPEN"] ytmusic-player #song-image::before {
+  display: none;
+}
+html.ytm-ao-ambient.ytm-ao-ambient ytmusic-player-page[player-ui-state="PLAYER_PAGE_OPEN"] ytmusic-player #song-image img {
+  max-width: 90% !important;
+  max-height: 90% !important;
+  border-radius: 16px;
+  box-shadow: 0 30px 80px rgb(0 0 0 / 0.55), 0 0 0 1px var(--ao-glass-line);
+}
+/* Queue / lyrics / related: one glass card */
+html.ytm-ao-ambient.ytm-ao-ambient ytmusic-player-page #side-panel {
+  background: var(--ao-glass);
+  backdrop-filter: blur(28px) saturate(1.4);
+  border: 1px solid var(--ao-glass-line);
+  border-radius: 22px;
+  padding: 4px 10px 0;
+}
+html.ytm-ao-ambient.ytm-ao-ambient ytmusic-player-page .tab-header-container { border-bottom-color: var(--ao-glass-line) !important; }
+html.ytm-ao-ambient.ytm-ao-ambient ytmusic-player-queue-item:hover { background: var(--ao-glass) !important; }
+html.ytm-ao-ambient.ytm-ao-ambient ytmusic-player-queue-item[selected],
+html.ytm-ao-ambient.ytm-ao-ambient ytmusic-player-queue-item[play-button-state="playing"],
+html.ytm-ao-ambient.ytm-ao-ambient ytmusic-player-queue-item[play-button-state="paused"] {
+  background: color-mix(in srgb, var(--ao-accent) 16%, transparent) !important;
+}
+
+/* Menus become glass too. */
+html.ytm-ao-ambient.ytm-ao-ambient ytmusic-menu-popup-renderer,
+html.ytm-ao-ambient.ytm-ao-ambient ytmusic-multi-page-menu-renderer,
+html.ytm-ao-ambient.ytm-ao-ambient tp-yt-paper-listbox {
+  background: var(--ao-glass-strong) !important;
+  backdrop-filter: blur(30px) saturate(1.5);
+  border-color: var(--ao-glass-line) !important;
+}
+
+/* Respect "Reduce motion" and "Reduce transparency" in macOS settings. */
+@media (prefers-reduced-motion: reduce) {
+  html.ytm-ao-clean ytmusic-two-row-item-renderer:hover { transform: none !important; }
+}
+@media (prefers-reduced-transparency: reduce) {
+  html.ytm-ao-ambient { --ao-glass: var(--ao-surface); --ao-glass-strong: var(--ao-surface); }
+}

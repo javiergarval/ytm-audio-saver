@@ -6,7 +6,12 @@
 'use strict';
 
 const api = typeof browser !== 'undefined' ? browser : chrome;
-const DEFAULTS = { enabled: true, level: 0, autoLearn: true, restyle: true, clean: true, theme: 'auto' };
+const DEFAULTS = { enabled: true, level: 0, autoLearn: true, restyle: true, clean: true, design: 'ambient', theme: 'auto' };
+const DESIGN_DESC = {
+  ambient: 'Colors follow the current cover. Floating glass. No Premium upsells.',
+  clean: 'Calm, flat and simple. No Premium upsells.',
+  off: "YouTube Music's original look.",
+};
 const MODE_DESC = [
   'The player only gets audio. No video is downloaded.',
   'A tiny video is listed but blocked. No video is downloaded.',
@@ -21,13 +26,16 @@ async function activeTab() {
 }
 
 async function loadSettings() {
-  const cfg = await api.storage.local.get(DEFAULTS);
+  const raw = await api.storage.local.get(null);
+  const cfg = { ...DEFAULTS, ...raw };
+  if (!('design' in raw) && raw.clean === false) cfg.design = 'off';
   $('enabled').checked = cfg.enabled;
   $('autoLearn').checked = cfg.autoLearn;
   $('restyle').checked = cfg.restyle;
-  $('clean').checked = cfg.clean;
+  for (const r of document.querySelectorAll('input[name="design"]')) r.checked = r.value === cfg.design;
+  $('design-desc').textContent = DESIGN_DESC[cfg.design] || '';
   for (const r of document.querySelectorAll('input[name="theme"]')) r.checked = r.value === cfg.theme;
-  document.querySelector('.seg-theme').classList.toggle('disabled', !cfg.clean);
+  document.querySelector('.seg-theme').classList.toggle('disabled', cfg.design === 'off');
   for (const r of document.querySelectorAll('input[name="level"]')) {
     r.checked = Number(r.value) === cfg.level;
   }
@@ -101,7 +109,9 @@ $('enabled').addEventListener('change', (e) => {
 $('autoLearn').addEventListener('change', (e) => api.storage.local.set({ autoLearn: e.target.checked }));
 // Applies instantly on the page (a CSS class), so no reload hint.
 $('restyle').addEventListener('change', (e) => api.storage.local.set({ restyle: e.target.checked }));
-$('clean').addEventListener('change', (e) => api.storage.local.set({ clean: e.target.checked }));
+for (const r of document.querySelectorAll('input[name="design"]')) {
+  r.addEventListener('change', () => api.storage.local.set({ design: r.value }));
+}
 for (const r of document.querySelectorAll('input[name="theme"]')) {
   r.addEventListener('change', () => api.storage.local.set({ theme: r.value }));
 }
@@ -124,7 +134,7 @@ $('reload').addEventListener('click', async () => {
 });
 
 api.storage.onChanged.addListener((changes, area) => {
-  if (area === 'local' && (changes.level || changes.enabled || changes.autoLearn || changes.restyle || changes.clean || changes.theme)) loadSettings();
+  if (area === 'local' && (changes.level || changes.enabled || changes.autoLearn || changes.restyle || changes.design || changes.theme)) loadSettings();
 });
 
 loadSettings();
