@@ -6,7 +6,7 @@
 'use strict';
 
 const api = typeof browser !== 'undefined' ? browser : chrome;
-const DEFAULTS = { enabled: true, level: 0, autoLearn: true, restyle: true };
+const DEFAULTS = { enabled: true, level: 0, autoLearn: true, restyle: true, clean: true, theme: 'auto' };
 const MODE_DESC = [
   'The player only gets audio. No video is downloaded.',
   'A tiny video is listed but blocked. No video is downloaded.',
@@ -25,6 +25,9 @@ async function loadSettings() {
   $('enabled').checked = cfg.enabled;
   $('autoLearn').checked = cfg.autoLearn;
   $('restyle').checked = cfg.restyle;
+  $('clean').checked = cfg.clean;
+  for (const r of document.querySelectorAll('input[name="theme"]')) r.checked = r.value === cfg.theme;
+  document.querySelector('.seg-theme').classList.toggle('disabled', !cfg.clean);
   for (const r of document.querySelectorAll('input[name="level"]')) {
     r.checked = Number(r.value) === cfg.level;
   }
@@ -98,6 +101,10 @@ $('enabled').addEventListener('change', (e) => {
 $('autoLearn').addEventListener('change', (e) => api.storage.local.set({ autoLearn: e.target.checked }));
 // Applies instantly on the page (a CSS class), so no reload hint.
 $('restyle').addEventListener('change', (e) => api.storage.local.set({ restyle: e.target.checked }));
+$('clean').addEventListener('change', (e) => api.storage.local.set({ clean: e.target.checked }));
+for (const r of document.querySelectorAll('input[name="theme"]')) {
+  r.addEventListener('change', () => api.storage.local.set({ theme: r.value }));
+}
 for (const r of document.querySelectorAll('input[name="level"]')) {
   r.addEventListener('change', () => {
     api.storage.local.set({ level: Number(r.value) });
@@ -117,7 +124,7 @@ $('reload').addEventListener('click', async () => {
 });
 
 api.storage.onChanged.addListener((changes, area) => {
-  if (area === 'local' && (changes.level || changes.enabled || changes.autoLearn || changes.restyle)) loadSettings();
+  if (area === 'local' && (changes.level || changes.enabled || changes.autoLearn || changes.restyle || changes.clean || changes.theme)) loadSettings();
 });
 
 loadSettings();

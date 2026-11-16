@@ -112,3 +112,6 @@ dd { margin: 0; text-align: right; word-break: break-word; }
 dd.warn { color: var(--warn); }
 
 #retest { font-size: 12px; }
+
+.seg-theme { margin: 8px 0 10px; }
+.seg.disabled { opacity: 0.45; pointer-events: none; }

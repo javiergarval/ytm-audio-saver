@@ -50,7 +50,10 @@
 
   const LEVEL = Object.freeze({ STRICT: 0, BLOCK: 1, MINIMAL: 2 });
   const LEVEL_NAMES = ['strict', 'block', 'minimal'];
-  const DEFAULT_CONFIG = Object.freeze({ enabled: true, level: LEVEL.STRICT, autoLearn: true, restyle: true });
+  const DEFAULT_CONFIG = Object.freeze({
+    enabled: true, level: LEVEL.STRICT, autoLearn: true, restyle: true, clean: true, theme: 'auto',
+  });
+  const THEMES = ['auto', 'dark', 'light'];
 
   // Audio itag preference. 774 (Opus ~256k) and 141 (AAC 256k) are Premium-only:
   // they never appear for free accounts, they are listed so the order stays correct
@@ -111,6 +114,8 @@
       level: clampLevel(src.level ?? DEFAULT_CONFIG.level),
       autoLearn: typeof src.autoLearn === 'boolean' ? src.autoLearn : DEFAULT_CONFIG.autoLearn,
       restyle: typeof src.restyle === 'boolean' ? src.restyle : DEFAULT_CONFIG.restyle,
+      clean: typeof src.clean === 'boolean' ? src.clean : DEFAULT_CONFIG.clean,
+      theme: THEMES.includes(src.theme) ? src.theme : DEFAULT_CONFIG.theme,
     };
   }
 
@@ -564,22 +569,44 @@
     });
   }
 
-  const art = { vid: null, url: null, shape: 'square', resolving: null };
+  const art = { vid: null, url: null, shape: 'square', base: null, since: 0 };
+
+  /**
+   * The player bar thumbnail is the square album cover for songs (lh3.googleusercontent.com).
+   * For music videos it's the video thumbnail (i.ytimg.com). Only trust it once it differs
+   * from the previous track's, because it updates a moment after the track changes.
+   */
+  function playerBarArt() {
+    const src = document.querySelector('ytmusic-player-bar img.image')?.getAttribute('src') || '';
+    return /^https:\/\//.test(src) ? src : null;
+  }
+
+  function bestBase(player, vid) {
+    const bar = playerBarArt();
+    if (bar && /googleusercontent\.com/.test(bar)) return bar; // square album art: always best
+    return artFor(player, vid);
+  }
+
+  function resolveFrom(base, vid) {
+    art.base = base;
+    resolveArt(artCandidates(base, vid)).then((best) => {
+      if (best && art.vid === vid && art.base === base) Object.assign(art, best);
+      paintArt();
+    });
+  }
 
   function updateArt(player) {
     if (!config.enabled || !state.videoId) return;
     const vid = state.videoId;
     if (art.vid !== vid) {
-      // Show the response's thumbnail immediately, then swap in a sharper one if it exists.
-      const base = artFor(player, vid);
-      Object.assign(art, { vid, url: base, shape: artShape(base, 4, 3) === 'letterbox' ? 'letterbox' : 'square' });
-      if (art.resolving !== vid) {
-        art.resolving = vid;
-        resolveArt(artCandidates(base, vid)).then((best) => {
-          if (best && art.vid === vid) Object.assign(art, best);
-          paintArt();
-        });
-      }
+      // Show what we have immediately, then swap in a sharper version once it loads.
+      const base = bestBase(player, vid);
+      Object.assign(art, { vid, url: base, since: Date.now(), shape: artShape(base, 4, 3) === 'letterbox' ? 'letterbox' : 'square' });
+      resolveFrom(base, vid);
+    } else if (Date.now() - art.since < 10_000) {
+      // The player bar may switch to the new cover a moment later: follow it for a few seconds.
+      const base = bestBase(player, vid);
+      if (base !== art.base && /googleusercontent\.com/.test(base)) resolveFrom(base, vid);
     }
     paintArt();
   }
@@ -598,11 +625,52 @@
     if (box.style.getPropertyValue('--ytm-ao-art') !== cssUrl) box.style.setProperty('--ytm-ao-art', cssUrl);
   }
 
+  // ---------------------------------------------------------------------------
+  // Clean design helpers: theme and Premium/upgrade removal
+  // ---------------------------------------------------------------------------
+  const lightQuery = window.matchMedia ? window.matchMedia('(prefers-color-scheme: light)') : null;
+  const isLight = () => config.theme === 'light' || (config.theme === 'auto' && Boolean(lightQuery?.matches));
+  lightQuery?.addEventListener?.('change', () => setRootClasses());
+
+  // Anything whose data points at the Premium page / upsell gets a hide marker (CSS hides it).
+  const PREMIUM = /SPunlimited|music_premium|upsell|UNLIMITED/i;
+  const PREMIUM_CANDIDATES = [
+    'ytmusic-guide-entry-renderer',            // sidebar "Upgrade"
+    'ytmusic-compact-link-renderer',           // account menu "Get Music Premium"
+    'ytmusic-menu-navigation-item-renderer',
+    'ytmusic-navigation-item-renderer',
+    'ytmusic-mealbar-promo-renderer',
+    'yt-mealbar-promo-renderer',
+  ].join(',');
+  const checked = new WeakMap(); // element -> data object it was checked against
+
+  function hidePremium(root = document) {
+    if (!config.enabled || !config.clean) return;
+    for (const el of root.querySelectorAll(PREMIUM_CANDIDATES)) {
+      const data = el.data ?? el.__data?.data ?? null;
+      if (!data || checked.get(el) === data) continue;
+      checked.set(el, data);
+      let json = '';
+      try { json = nativeStringify(data); } catch { /* circular: skip */ }
+      el.toggleAttribute('ytm-ao-hidden', PREMIUM.test(json));
+    }
+  }
+
+  let popupObserved = null;
+  function observePopups() {
+    const popups = document.querySelector('ytmusic-popup-container');
+    if (!popups || popupObserved === popups) return;
+    popupObserved = popups;
+    new MutationObserver(() => hidePremium(popups)).observe(popups, { childList: true, subtree: true });
+  }
+
   function setRootClasses() {
     const root = document.documentElement;
     if (!root) return;
     root.classList.toggle('ytm-ao-on', config.enabled);
     root.classList.toggle('ytm-ao-style', config.enabled && config.restyle);
+    root.classList.toggle('ytm-ao-clean', config.enabled && config.clean);
+    root.classList.toggle('ytm-ao-light', config.enabled && config.clean && isLight());
     root.classList.toggle('ytm-ao-ad', state.ad);
   }
 
@@ -631,7 +699,7 @@
     state.ticks++;
     setRootClasses();
     const player = document.getElementById('movie_player');
-    if (!player) { syncAllow(); return; }
+    if (!player) { syncAllow(); try { hidePremium(); observePopups(); } catch { /* ignore */ } return; }
     observePlayer(player);
     readAdState(player);
 
@@ -642,6 +710,7 @@
     syncAllow();
     watchPlayback(player); // first: playback recovery must never depend on cosmetics
     try { updateArt(player); } catch (e) { log('artwork update failed', e); }
+    try { hidePremium(); observePopups(); } catch (e) { log('clean-up failed', e); }
     if (state.ticks % STATUS_EVERY_S === 0) sendStatus();
   }
 
@@ -700,7 +769,7 @@
   if (globalThis.__YTM_AO_TEST__) {
     globalThis.__YTM_AO_TEST__.api = {
       pickBestAudio, pickCheapestVideo, patchAny, trackInfo, LEVEL,
-      getConfig: () => config, applyConfig, effectiveLevel, artCandidates, artShape,
+      getConfig: () => config, applyConfig, effectiveLevel, artCandidates, artShape, hidePremium, isLight,
     };
   }
 })();

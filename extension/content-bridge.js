@@ -17,7 +17,8 @@
   const api = typeof browser !== 'undefined' ? browser : chrome;
   const MSG_FROM_MAIN = 'ytm-ao-main';
   const MSG_FROM_BRIDGE = 'ytm-ao-bridge';
-  const DEFAULTS = { enabled: true, level: 0, autoLearn: true, restyle: true };
+  const DEFAULTS = { enabled: true, level: 0, autoLearn: true, restyle: true, clean: true, theme: 'auto' };
+  const KEYS = Object.keys(DEFAULTS);
 
   const toPage = (type, payload = {}) =>
     window.postMessage({ source: MSG_FROM_BRIDGE, type, ...payload }, location.origin);
@@ -32,7 +33,7 @@
   async function pushConfig() {
     try {
       const cfg = await api.storage.local.get(DEFAULTS);
-      toPage('config', { config: { enabled: cfg.enabled, level: cfg.level, autoLearn: cfg.autoLearn, restyle: cfg.restyle } });
+      toPage('config', { config: Object.fromEntries(KEYS.map((k) => [k, cfg[k]])) });
     } catch { /* ignore */ }
   }
 
@@ -62,7 +63,7 @@
 
   api.storage.onChanged.addListener((changes, area) => {
     if (area !== 'local') return;
-    if (changes.enabled || changes.level || changes.autoLearn || changes.restyle) pushConfig();
+    if (KEYS.some((k) => k in changes)) pushConfig();
     if (changes.resetAt) toPage('resetLearning');
   });
 

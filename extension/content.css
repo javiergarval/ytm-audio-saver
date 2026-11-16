@@ -89,3 +89,296 @@ html.ytm-ao-style:not(.ytm-ao-ad) ytmusic-player #song-image img[data-ytm-ao-sha
   clip-path: inset(12.5% 0 round 10px);
   box-shadow: none;
 }
+
+/* ===========================================================================
+ * CLEAN DESIGN (html.ytm-ao-clean; switch: popup → Advanced → Clean design)
+ * Follows the system theme (html.ytm-ao-light) unless forced in the popup.
+ * Selectors marked [verified] were confirmed on the live page structure;
+ * the rest are YouTube Music's long-standing element names. If one is wrong
+ * it simply matches nothing, so nothing breaks.
+ * =========================================================================== */
+
+/* ---- Design tokens -------------------------------------------------------- */
+html.ytm-ao-clean {
+  --ao-bg: #0b0b0e;
+  --ao-surface: #141418;
+  --ao-raised: #1c1c22;
+  --ao-hover: rgb(255 255 255 / 0.06);
+  --ao-line: rgb(255 255 255 / 0.08);
+  --ao-text: #f4f4f6;
+  --ao-muted: #9b9ba6;
+  --ao-accent: #ff375f;
+  --ao-radius: 12px;
+  --ao-shadow: 0 10px 30px rgb(0 0 0 / 0.35);
+  scrollbar-width: thin;
+  scrollbar-color: var(--ao-line) transparent;
+}
+html.ytm-ao-clean.ytm-ao-light {
+  --ao-bg: #f6f6f8;
+  --ao-surface: #ffffff;
+  --ao-raised: #ededf1;
+  --ao-hover: rgb(0 0 0 / 0.05);
+  --ao-line: rgb(0 0 0 / 0.09);
+  --ao-text: #15151a;
+  --ao-muted: #686873;
+  --ao-accent: #e11d48;
+  --ao-shadow: 0 10px 30px rgb(0 0 0 / 0.12);
+}
+
+/* Map YouTube's own design tokens onto ours [verified names], so every
+   component that reads them follows the theme without per-element rules. */
+html.ytm-ao-clean.ytm-ao-clean {
+  --yt-sys-color-baseline--base-background: var(--ao-bg) !important;
+  --yt-sys-color-baseline--surface-container: var(--ao-surface) !important;
+  --yt-sys-color-baseline--raised-background: var(--ao-raised) !important;
+  --yt-sys-color-baseline--menu-background: var(--ao-raised) !important;
+  --yt-sys-color-baseline--text-primary: var(--ao-text) !important;
+  --yt-sys-color-baseline--text-secondary: var(--ao-muted) !important;
+  --yt-sys-color-baseline--outline: var(--ao-line) !important;
+  --yt-sys-color-baseline--tonal-background: var(--ao-raised) !important;
+  --yt-sys-color-baseline--additive-background: var(--ao-hover) !important;
+  --yt-sys-color-baseline--mono-tonal-hover: var(--ao-hover) !important;
+  --yt-sys-color-baseline--button-chip-background-hover: var(--ao-hover) !important;
+  --yt-sys-color-baseline--static-brand-red: var(--ao-accent) !important;
+  --yt-sys-color-baseline--red-indicator: var(--ao-accent) !important;
+  --yt-primary-text-color: var(--ao-text) !important;
+  --yt-endpoint-hover-color: var(--ao-text) !important;
+  --yt-deprecated-general-background-a: var(--ao-surface) !important;
+  --yt-deprecated-general-background-b: var(--ao-bg) !important;
+  --yt-deprecated-general-background-c: var(--ao-bg) !important;
+  /* YouTube Music's legacy palette (light mode needs these inverted) */
+  --ytmusic-general-background-a: var(--ao-surface) !important;
+  --ytmusic-general-background-b: var(--ao-bg) !important;
+  --ytmusic-general-background-c: var(--ao-bg) !important;
+  --ytmusic-color-white1: var(--ao-text) !important;
+  --ytmusic-text-primary: var(--ao-text) !important;
+  --ytmusic-text-secondary: var(--ao-muted) !important;
+  --ytmusic-color-white1-alpha70: var(--ao-muted) !important;
+  --ytmusic-color-white1-alpha50: var(--ao-muted) !important;
+  --ytmusic-color-white1-alpha10: var(--ao-line) !important;
+  --ytmusic-color-black1: var(--ao-bg) !important;
+  --ytmusic-color-black2: var(--ao-surface) !important;
+  --ytmusic-color-black3: var(--ao-surface) !important;
+  --ytmusic-color-black4: var(--ao-raised) !important;
+  --paper-slider-active-color: var(--ao-accent) !important;
+  --paper-slider-knob-color: var(--ao-accent) !important;
+  --paper-progress-active-color: var(--ao-accent) !important;
+}
+
+/* ---- Page background [verified elements] -------------------------------- */
+html.ytm-ao-clean body,
+html.ytm-ao-clean ytmusic-app,
+html.ytm-ao-clean ytmusic-app-layout,
+html.ytm-ao-clean ytmusic-browse-response,
+html.ytm-ao-clean #mini-guide-background,
+html.ytm-ao-clean #guide-wrapper {
+  background: var(--ao-bg) !important;
+  color: var(--ao-text);
+  border-color: var(--ao-line) !important;
+}
+/* Page-tinted gradients behind Home/artist pages: keep it calm and flat. */
+html.ytm-ao-clean ytmusic-browse-response #background,
+html.ytm-ao-clean ytmusic-fullbleed-thumbnail-renderer {
+  opacity: 0.35;
+}
+html.ytm-ao-clean #mini-guide-background { border-right: 0 !important; }
+
+/* ---- Top bar [verified] ---------------------------------------------------- */
+html.ytm-ao-clean #nav-bar-background {
+  background: color-mix(in srgb, var(--ao-bg) 85%, transparent) !important;
+  backdrop-filter: blur(18px) saturate(1.3);
+  opacity: 1 !important;
+  border: 0 !important;
+}
+html.ytm-ao-clean #nav-bar-divider { display: none !important; }
+
+html.ytm-ao-clean ytmusic-search-box .search-box {
+  background: var(--ao-surface) !important;
+  border: 1px solid var(--ao-line) !important;
+  border-radius: var(--ao-radius) !important;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+html.ytm-ao-clean ytmusic-search-box .search-box:focus-within {
+  border-color: color-mix(in srgb, var(--ao-accent) 60%, transparent) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ao-accent) 18%, transparent);
+}
+html.ytm-ao-clean ytmusic-search-box input#input {
+  color: var(--ao-text) !important;
+  caret-color: var(--ao-accent);
+}
+html.ytm-ao-clean ytmusic-search-box input#input::placeholder { color: var(--ao-muted) !important; }
+html.ytm-ao-clean ytmusic-search-box #suggestion-list {
+  background: var(--ao-surface) !important;
+  border: 1px solid var(--ao-line) !important;
+  border-top: 0 !important;
+  border-radius: 0 0 var(--ao-radius) var(--ao-radius) !important;
+  box-shadow: var(--ao-shadow);
+}
+
+/* ---- Sidebar [verified] -------------------------------------------------- */
+html.ytm-ao-clean ytmusic-guide-entry-renderer tp-yt-paper-item {
+  border-radius: var(--ao-radius) !important;
+  transition: background-color 0.15s;
+}
+html.ytm-ao-clean ytmusic-guide-entry-renderer tp-yt-paper-item:hover { background: var(--ao-hover) !important; }
+html.ytm-ao-clean ytmusic-guide-entry-renderer[active] tp-yt-paper-item {
+  background: var(--ao-raised) !important;
+}
+html.ytm-ao-clean ytmusic-guide-entry-renderer[active] yt-icon { color: var(--ao-accent) !important; }
+html.ytm-ao-clean ytmusic-guide-section-renderer #divider { background: var(--ao-line) !important; }
+
+/* ---- Chips (filters at the top of Home / Library) [verified element] ------ */
+html.ytm-ao-clean ytmusic-chip-cloud-chip-renderer .gradient-box {
+  background: transparent !important;
+  border-radius: 999px !important;
+}
+html.ytm-ao-clean ytmusic-chip-cloud-chip-renderer a.yt-simple-endpoint {
+  background: var(--ao-surface) !important;
+  border: 1px solid var(--ao-line) !important;
+  border-radius: 999px !important;
+  color: var(--ao-text) !important;
+  transition: background-color 0.15s, border-color 0.15s;
+}
+html.ytm-ao-clean ytmusic-chip-cloud-chip-renderer a.yt-simple-endpoint:hover { background: var(--ao-raised) !important; }
+html.ytm-ao-clean ytmusic-chip-cloud-chip-renderer[is-selected] a.yt-simple-endpoint,
+html.ytm-ao-clean ytmusic-chip-cloud-chip-renderer[chip-style="STYLE_PRIMARY"] a.yt-simple-endpoint {
+  background: var(--ao-text) !important;
+  color: var(--ao-bg) !important;
+  border-color: transparent !important;
+}
+
+/* ---- Shelves and cards (Home, Explore, Library) -------------------------- */
+/* Calmer section titles: YouTube shows them at ~45px. */
+html.ytm-ao-clean ytmusic-carousel-shelf-basic-header-renderer .title,
+html.ytm-ao-clean ytmusic-carousel-shelf-basic-header-renderer h2,
+html.ytm-ao-clean ytmusic-shelf-renderer h2 .title {
+  font-size: 24px !important;
+  line-height: 1.25 !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.01em !important;
+}
+html.ytm-ao-clean ytmusic-carousel-shelf-basic-header-renderer .strapline { color: var(--ao-muted) !important; }
+/* Spacious rhythm between sections. */
+html.ytm-ao-clean ytmusic-carousel-shelf-renderer { margin-bottom: 40px !important; }
+/* Cards: gentle lift on hover. */
+html.ytm-ao-clean ytmusic-two-row-item-renderer {
+  transition: transform 0.18s ease;
+}
+html.ytm-ao-clean ytmusic-two-row-item-renderer:hover { transform: translateY(-3px); }
+html.ytm-ao-clean ytmusic-two-row-item-renderer .subtitle,
+html.ytm-ao-clean ytmusic-responsive-list-item-renderer .secondary-flex-columns {
+  color: var(--ao-muted) !important;
+}
+/* Song lists (playlists, albums, search results) */
+html.ytm-ao-clean ytmusic-responsive-list-item-renderer {
+  border-radius: 10px;
+  border-bottom-color: var(--ao-line) !important;
+}
+html.ytm-ao-clean ytmusic-responsive-list-item-renderer:hover { background: var(--ao-hover) !important; }
+/* Explore: big category tiles and the mood/genre buttons */
+html.ytm-ao-clean ytmusic-navigation-button-renderer button {
+  background: var(--ao-surface) !important;
+  border-radius: var(--ao-radius) !important;
+  border-top: 1px solid var(--ao-line) !important;
+  border-right: 1px solid var(--ao-line) !important;
+  border-bottom: 1px solid var(--ao-line) !important;
+  color: var(--ao-text) !important;
+}
+html.ytm-ao-clean ytmusic-navigation-button-renderer button:hover { background: var(--ao-raised) !important; }
+
+/* ---- Player bar [verified] ----------------------------------------------- */
+html.ytm-ao-clean ytmusic-player-bar {
+  background: color-mix(in srgb, var(--ao-surface) 92%, transparent) !important;
+  backdrop-filter: blur(18px) saturate(1.3);
+  border-top: 1px solid var(--ao-line);
+}
+html.ytm-ao-clean ytmusic-player-bar img.image { border-radius: 8px !important; }
+html.ytm-ao-clean ytmusic-player-bar .title { color: var(--ao-text) !important; font-weight: 600 !important; }
+html.ytm-ao-clean ytmusic-player-bar .byline,
+html.ytm-ao-clean ytmusic-player-bar .byline a,
+html.ytm-ao-clean ytmusic-player-bar .time-info { color: var(--ao-muted) !important; }
+html.ytm-ao-clean ytmusic-player-bar yt-icon,
+html.ytm-ao-clean ytmusic-player-bar .ytSpecIconShapeHost { color: var(--ao-text) !important; }
+/* Progress bar: accent fill, subtle track [verified ids] */
+html.ytm-ao-clean ytmusic-player-bar #progress-bar #primaryProgress { background: var(--ao-accent) !important; }
+html.ytm-ao-clean ytmusic-player-bar #progress-bar #secondaryProgress { background: color-mix(in srgb, var(--ao-text) 22%, transparent) !important; }
+html.ytm-ao-clean ytmusic-player-bar #progress-bar #progressContainer { background: var(--ao-line) !important; }
+html.ytm-ao-clean ytmusic-player-bar .slider-knob-inner {
+  background: var(--ao-accent) !important;
+  border-color: var(--ao-accent) !important;
+}
+html.ytm-ao-clean ytmusic-player-bar #volume-slider #primaryProgress { background: var(--ao-text) !important; }
+html.ytm-ao-clean ytmusic-player-bar #volume-slider #progressContainer { background: var(--ao-line) !important; }
+
+/* ---- Player page (queue / lyrics / related) [verified] -------------------- */
+html.ytm-ao-clean ytmusic-player-page { background: var(--ao-bg) !important; }
+html.ytm-ao-clean ytmusic-player#player {
+  border-radius: 16px;
+  overflow: hidden;
+}
+html.ytm-ao-clean ytmusic-player-page[player-ui-state="MINIPLAYER"] ytmusic-player#player {
+  box-shadow: var(--ao-shadow);
+}
+html.ytm-ao-clean ytmusic-player-page tp-yt-paper-tab .tab-content {
+  text-transform: none !important;
+  font-weight: 600 !important;
+  letter-spacing: 0 !important;
+}
+html.ytm-ao-clean ytmusic-player-page tp-yt-paper-tab:not(.iron-selected) .tab-content { color: var(--ao-muted) !important; }
+html.ytm-ao-clean ytmusic-player-page #selectionBar { border-bottom-color: var(--ao-accent) !important; }
+html.ytm-ao-clean ytmusic-player-page .tab-header-container { border-bottom: 1px solid var(--ao-line) !important; }
+html.ytm-ao-clean ytmusic-player-queue-item {
+  border-radius: 10px;
+  border-bottom-color: transparent !important;
+  transition: background-color 0.15s;
+}
+html.ytm-ao-clean ytmusic-player-queue-item:hover { background: var(--ao-hover) !important; }
+html.ytm-ao-clean ytmusic-player-queue-item[selected],
+html.ytm-ao-clean ytmusic-player-queue-item[play-button-state="playing"],
+html.ytm-ao-clean ytmusic-player-queue-item[play-button-state="paused"] {
+  background: var(--ao-raised) !important;
+}
+html.ytm-ao-clean ytmusic-player-queue-item .left-items img { border-radius: 6px !important; }
+html.ytm-ao-clean ytmusic-player-queue-item .byline,
+html.ytm-ao-clean ytmusic-player-queue-item .duration { color: var(--ao-muted) !important; }
+
+/* ---- Menus and dialogs --------------------------------------------------- */
+html.ytm-ao-clean ytmusic-menu-popup-renderer,
+html.ytm-ao-clean ytmusic-multi-page-menu-renderer,
+html.ytm-ao-clean tp-yt-paper-listbox {
+  background: var(--ao-raised) !important;
+  border: 1px solid var(--ao-line) !important;
+  border-radius: var(--ao-radius) !important;
+  box-shadow: var(--ao-shadow) !important;
+}
+
+/* ---- Removed: Premium upsells, hint bubbles, "new recommendations" chip --- */
+html.ytm-ao-clean [ytm-ao-hidden],
+html.ytm-ao-clean ytmusic-content-update-chip,
+html.ytm-ao-clean ytmusic-popup-container yt-bubble-hint-renderer,
+html.ytm-ao-clean ytmusic-mealbar-promo-renderer,
+html.ytm-ao-clean yt-mealbar-promo-renderer,
+html.ytm-ao-clean a[href*="music_premium"],
+html.ytm-ao-clean a[href*="/premium"] {
+  display: none !important;
+}
+
+/* ---- Light mode: YouTube Music hardcodes white text and icons in places ---- */
+html.ytm-ao-clean.ytm-ao-light ytmusic-app,
+html.ytm-ao-clean.ytm-ao-light ytmusic-nav-bar,
+html.ytm-ao-clean.ytm-ao-light ytmusic-guide-renderer,
+html.ytm-ao-clean.ytm-ao-light ytmusic-player-page,
+html.ytm-ao-clean.ytm-ao-light ytmusic-player-bar {
+  color: var(--ao-text) !important;
+}
+html.ytm-ao-clean.ytm-ao-light yt-icon,
+html.ytm-ao-clean.ytm-ao-light .ytSpecIconShapeHost,
+html.ytm-ao-clean.ytm-ao-light ytmusic-guide-entry-renderer .title,
+html.ytm-ao-clean.ytm-ao-light ytmusic-player-queue-item .song-title,
+html.ytm-ao-clean.ytm-ao-light ytmusic-two-row-item-renderer .title,
+html.ytm-ao-clean.ytm-ao-light ytmusic-carousel-shelf-basic-header-renderer .title,
+html.ytm-ao-clean.ytm-ao-light ytmusic-responsive-list-item-renderer .title {
+  color: var(--ao-text) !important;
+}
+/* The YouTube Music logo is white text: give it a dark tint in light mode. */
+html.ytm-ao-clean.ytm-ao-light ytmusic-logo img.logo { filter: invert(1) hue-rotate(180deg); }
