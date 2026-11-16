@@ -12,7 +12,11 @@ audio format, and shows an album-art player instead of the video. Works in Firef
 | UI | `content.css` + `content-main.js` | Hides `#song-video`, shows `#song-image` filled with the sharpest artwork available. **Album-art player** (on by default, switch in popup → Advanced): centered art with rounded corners over a blurred copy of itself. Nothing is hidden during ads, so "Skip" stays clickable. |
 
 ### Design (popup → Advanced)
-- **Ambient** (default): the window takes the colors of the song playing. A huge blurred
+- **Now playing** (default): a big now-playing hero at the top of Home, Explore and
+  Library: the cover sliding out of a spinning record, the title, previous/play/next/like
+  and a clickable progress bar, over the colors of the cover (Ambient look). It is our own
+  element, so YouTube's components are untouched; other pages keep their own headers.
+- **Ambient**: the window takes the colors of the song playing. A huge blurred
   copy of the cover fills the background, the accent color is picked from the artwork,
   and the top bar, player bar and queue float above it as frosted glass.
 - **Clean**: calm, flat and simple.

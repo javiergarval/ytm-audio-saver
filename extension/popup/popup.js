@@ -6,8 +6,9 @@
 'use strict';
 
 const api = typeof browser !== 'undefined' ? browser : chrome;
-const DEFAULTS = { enabled: true, level: 0, autoLearn: true, restyle: true, clean: true, design: 'ambient', theme: 'auto' };
+const DEFAULTS = { enabled: true, level: 0, autoLearn: true, restyle: true, clean: true, design: 'nowplaying', theme: 'auto' };
 const DESIGN_DESC = {
+  nowplaying: 'Big now-playing hero on Home, Explore and Library, over the colors of the cover.',
   ambient: 'Colors follow the current cover. Floating glass. No Premium upsells.',
   clean: 'Calm, flat and simple. No Premium upsells.',
   off: "YouTube Music's original look.",

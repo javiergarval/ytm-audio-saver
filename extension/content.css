@@ -613,3 +613,160 @@ html.ytm-ao-clean.ytm-ao-light tp-yt-paper-dialog {
   background: var(--ao-surface) !important;
   color: var(--ao-text) !important;
 }
+
+/* ===========================================================================
+ * NOW PLAYING DESIGN (html.ytm-ao-np, on top of the Ambient look)
+ * #ytm-ao-hero is our own element (in <body>), shown on Home / Explore /
+ * Library while something plays. html.ytm-ao-hero-on reserves its height.
+ * =========================================================================== */
+#ytm-ao-hero[hidden] { display: none !important; }
+#ytm-ao-hero {
+  position: absolute;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: clamp(28px, 4vw, 64px);
+  padding: 8px 0 4px;
+  color: var(--ao-text);
+  font-family: inherit;
+  pointer-events: auto;
+}
+#ytm-ao-hero.under { z-index: 0; }
+
+/* Cover sliding out of a record */
+#ytm-ao-hero .ao-disc {
+  position: relative;
+  flex: none;
+  width: clamp(250px, 26vw, 400px);
+  aspect-ratio: 1.36 / 1;
+}
+#ytm-ao-hero .ao-sleeve,
+#ytm-ao-hero .ao-vinyl { position: absolute; top: 0; aspect-ratio: 1; height: 100%; }
+#ytm-ao-hero .ao-sleeve {
+  left: 0;
+  border-radius: 12px;
+  background: var(--ao-cover, var(--ao-raised)) center / cover no-repeat;
+  box-shadow: 0 30px 70px rgb(0 0 0 / 0.55), 0 0 0 1px rgb(255 255 255 / 0.06);
+}
+#ytm-ao-hero .ao-vinyl {
+  right: 0;
+  height: 92%;
+  top: 4%;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle, transparent 0 31%, rgb(255 255 255 / 0.05) 31.5% 32%, transparent 32.5%),
+    repeating-radial-gradient(circle, #111 0 2px, #1c1c1c 2px 4px);
+  box-shadow: 0 20px 50px rgb(0 0 0 / 0.6);
+  transition: transform 0.6s ease;
+}
+#ytm-ao-hero .ao-vinyl::after {
+  content: "";
+  position: absolute;
+  inset: 33%;
+  border-radius: 50%;
+  background: var(--ao-cover, var(--ao-accent)) center / cover no-repeat;
+  box-shadow: 0 0 0 5px #0d0d0d;
+}
+#ytm-ao-hero .ao-vinyl::before {
+  content: "";
+  position: absolute;
+  inset: 48.5%;
+  border-radius: 50%;
+  background: #0d0d0d;
+  z-index: 1;
+}
+@keyframes ao-spin { to { transform: rotate(360deg); } }
+#ytm-ao-hero.playing .ao-vinyl { animation: ao-spin 6s linear infinite; }
+
+/* Text */
+#ytm-ao-hero .ao-meta { min-width: 0; flex: 1; max-width: 640px; }
+#ytm-ao-hero .ao-eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.22em;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ao-accent);
+}
+#ytm-ao-hero .ao-title {
+  margin: 10px 0 8px;
+  font-size: clamp(40px, 4.6vw, 72px);
+  line-height: 1.02;
+  font-weight: 800;
+  letter-spacing: -0.035em;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-wrap: balance;
+}
+#ytm-ao-hero .ao-sub { font-size: 19px; color: color-mix(in srgb, var(--ao-text) 80%, transparent); }
+
+/* Controls */
+#ytm-ao-hero .ao-ctrl { display: flex; align-items: center; gap: 14px; margin-top: 24px; }
+#ytm-ao-hero .ao-btn {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ao-text);
+  cursor: pointer;
+  transition: background-color 0.15s, transform 0.1s;
+}
+#ytm-ao-hero .ao-btn svg { width: 28px; height: 28px; fill: currentColor; }
+#ytm-ao-hero .ao-btn:hover { background: var(--ao-glass, var(--ao-hover)); }
+#ytm-ao-hero .ao-btn:active { transform: scale(0.94); }
+#ytm-ao-hero .ao-btn:focus-visible { outline: 2px solid var(--ao-accent); outline-offset: 2px; }
+#ytm-ao-hero .ao-play { width: 64px; height: 64px; background: var(--ao-text); color: var(--ao-bg); }
+#ytm-ao-hero .ao-play svg { width: 32px; height: 32px; }
+#ytm-ao-hero .ao-play:hover { background: var(--ao-text); transform: scale(1.04); }
+#ytm-ao-hero .ao-like svg { width: 22px; height: 22px; }
+#ytm-ao-hero .ao-like.on { color: var(--ao-accent); }
+
+/* Progress */
+#ytm-ao-hero .ao-bar {
+  position: relative;
+  height: 4px;
+  margin-top: 24px;
+  max-width: 440px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--ao-text) 18%, transparent);
+  cursor: pointer;
+}
+#ytm-ao-hero .ao-bar::after { content: ""; position: absolute; inset: -8px 0; } /* bigger click area */
+#ytm-ao-hero .ao-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: 2px;
+  background: var(--ao-accent);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--ao-accent) 60%, transparent);
+}
+#ytm-ao-hero .ao-bar:focus-visible { outline: 2px solid var(--ao-accent); outline-offset: 6px; }
+#ytm-ao-hero .ao-times {
+  display: flex;
+  justify-content: space-between;
+  max-width: 440px;
+  margin-top: 8px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: color-mix(in srgb, var(--ao-text) 65%, transparent);
+}
+
+/* Reserve the hero's space at the top of the page content. */
+html.ytm-ao-np.ytm-ao-hero-on ytmusic-browse-response {
+  padding-top: var(--ao-hero-h, 360px) !important;
+}
+/* The hero replaces the mini player on these pages (ads still show it). */
+html.ytm-ao-np.ytm-ao-hero-on:not(.ytm-ao-ad) ytmusic-player-page[player-ui-state="MINIPLAYER"] {
+  visibility: hidden !important;
+}
+
+/* Light mode */
+html.ytm-ao-light #ytm-ao-hero .ao-sleeve { box-shadow: 0 24px 60px rgb(0 0 0 / 0.25); }
+
+/* Respect "Reduce motion": no spinning record. */
+@media (prefers-reduced-motion: reduce) {
+  #ytm-ao-hero.playing .ao-vinyl { animation: none; }
+}

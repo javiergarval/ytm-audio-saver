@@ -51,10 +51,11 @@
   const LEVEL = Object.freeze({ STRICT: 0, BLOCK: 1, MINIMAL: 2 });
   const LEVEL_NAMES = ['strict', 'block', 'minimal'];
   const DEFAULT_CONFIG = Object.freeze({
-    enabled: true, level: LEVEL.STRICT, autoLearn: true, restyle: true, design: 'ambient', theme: 'auto',
+    enabled: true, level: LEVEL.STRICT, autoLearn: true, restyle: true, design: 'nowplaying', theme: 'auto',
   });
   const THEMES = ['auto', 'dark', 'light'];
-  const DESIGNS = ['ambient', 'clean', 'off'];
+  const DESIGNS = ['nowplaying', 'ambient', 'clean', 'off'];
+  const usesAmbient = () => config.design === 'ambient' || config.design === 'nowplaying';
 
   // Audio itag preference. 774 (Opus ~256k) and 141 (AAC 256k) are Premium-only:
   // they never appear for free accounts, they are listed so the order stays correct
@@ -688,7 +689,7 @@
 
   function applyAmbient() {
     const root = document.documentElement;
-    if (!root || !designOn() || config.design !== 'ambient') return;
+    if (!root || !designOn() || !usesAmbient()) return;
     const url = art.vid === state.videoId ? art.url : null;
     if (!url || url === ambient.url) return;
     ambient.url = url;
@@ -770,7 +771,7 @@
     const parts = (document.querySelector('ytmusic-player-bar .byline')?.textContent || '')
       .split('•').map((s) => s.trim()).filter(Boolean);
     const isSong = parts.length >= 3 && /^\d{4}$/.test(parts[parts.length - 1]);
-    return { title, artist: parts[0] || '', album: isSong ? parts[1] : '' };
+    return { title, artist: parts[0] || '', album: isSong ? parts[1] : '', year: isSong ? parts[parts.length - 1] : '' };
   }
 
   function artworkFor(url) {
@@ -796,7 +797,7 @@
       const current = ms.metadata?.artwork?.[ms.metadata.artwork.length - 1]?.src;
       if (key !== media.key || current !== cover) {
         try {
-          ms.metadata = new MediaMetadata({ ...info, artwork: artworkFor(cover) });
+          ms.metadata = new MediaMetadata({ title: info.title, artist: info.artist, album: info.album, artwork: artworkFor(cover) });
           media.key = key;
         } catch (e) { log('media metadata failed', e); }
       }
@@ -813,13 +814,230 @@
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // "Now playing" hero (design: nowplaying)
+  // A big now-playing block at the top of Home / Explore / Library: the cover
+  // sliding out of a spinning record, the title, controls and a progress bar.
+  // It is our own element in <body> (YouTube's components are never touched):
+  // it is positioned over the top of the page, and the page content is pushed
+  // down by the same height with one CSS variable.
+  // ---------------------------------------------------------------------------
+  const SVG_NS = 'http://www.w3.org/2000/svg';
+  const ICONS = {
+    prev: 'M6 6h2v12H6zm3.5 6L18 6v12z',
+    play: 'M8 5v14l11-7z',
+    pause: 'M7 5h4v14H7zm6 0h4v14h-4z',
+    next: 'M16 6h2v12h-2zM6 18l8.5-6L6 6z',
+    like: 'M2 21h4V9H2zm20-11a2 2 0 00-2-2h-6.3l1-4.6V3a1.5 1.5 0 00-.4-1L13 1 6.6 7.4A2 2 0 006 9v10a2 2 0 002 2h9a2 2 0 001.8-1.2l3-7.1A2 2 0 0022 12z',
+  };
+  const HERO_PATHS = (path) => path === '/' || path === '/explore' || path.startsWith('/library');
+  const es = /^es\b/i.test(document.documentElement?.lang || navigator.language || '');
+  const T = es
+    ? { eyebrow: 'Sonando ahora', prev: 'Anterior', next: 'Siguiente', play: 'Reproducir', pause: 'Pausar', like: 'Me gusta' }
+    : { eyebrow: 'Now playing', prev: 'Previous', next: 'Next', play: 'Play', pause: 'Pause', like: 'Like' };
+
+  const hero = { el: null, parts: null, visible: false, height: 0, key: '' };
+
+  function el(tag, cls, parent) {
+    const node = document.createElement(tag);
+    if (cls) node.className = cls;
+    if (parent) parent.appendChild(node);
+    return node;
+  }
+
+  function iconButton(name, label, cls, parent) {
+    const b = el('button', `ao-btn ${cls || ''}`.trim(), parent);
+    b.type = 'button';
+    b.setAttribute('aria-label', label);
+    b.title = label;
+    const svg = document.createElementNS(SVG_NS, 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('aria-hidden', 'true');
+    const path = document.createElementNS(SVG_NS, 'path');
+    path.setAttribute('d', ICONS[name]);
+    svg.appendChild(path);
+    b.appendChild(svg);
+    b._path = path;
+    return b;
+  }
+
+  const fmtTime = (s) => {
+    if (!Number.isFinite(s) || s < 0) return '0:00';
+    const m = Math.floor(s / 60), r = Math.floor(s % 60);
+    return `${m}:${String(r).padStart(2, '0')}`;
+  };
+
+  function playerEl() { return document.getElementById('movie_player'); }
+
+  function buildHero() {
+    const root = el('section', '', null);
+    root.id = 'ytm-ao-hero';
+    root.setAttribute('aria-label', T.eyebrow);
+    const disc = el('div', 'ao-disc', root);
+    el('div', 'ao-vinyl', disc);
+    el('div', 'ao-sleeve', disc);
+    const meta = el('div', 'ao-meta', root);
+    el('div', 'ao-eyebrow', meta).textContent = T.eyebrow;
+    const title = el('div', 'ao-title', meta);
+    const sub = el('div', 'ao-sub', meta);
+    const ctrl = el('div', 'ao-ctrl', meta);
+    const prev = iconButton('prev', T.prev, '', ctrl);
+    const play = iconButton('pause', T.pause, 'ao-play', ctrl);
+    const next = iconButton('next', T.next, '', ctrl);
+    const like = iconButton('like', T.like, 'ao-like', ctrl);
+    const bar = el('div', 'ao-bar', meta);
+    bar.setAttribute('role', 'slider');
+    bar.setAttribute('aria-label', 'Progress');
+    bar.tabIndex = 0;
+    const fill = el('div', 'ao-fill', bar);
+    const times = el('div', 'ao-times', meta);
+    const cur = el('span', '', times);
+    const dur = el('span', '', times);
+
+    prev.addEventListener('click', () => { if (!clickPlayerBar('.previous-button')) playerEl()?.previousVideo?.(); });
+    next.addEventListener('click', () => { if (!clickPlayerBar('.next-button')) playerEl()?.nextVideo?.(); });
+    play.addEventListener('click', () => {
+      if (clickPlayerBar('#play-pause-button')) return;
+      const v = playerEl()?.querySelector('video');
+      if (v) (v.paused ? playerEl().playVideo?.() : playerEl().pauseVideo?.());
+    });
+    like.addEventListener('click', () => {
+      const btn = document.querySelector('ytmusic-player-bar ytmusic-like-button-renderer button');
+      btn?.click();
+      setTimeout(updateHero, 250);
+    });
+    const seekFromEvent = (e) => {
+      const v = playerEl()?.querySelector('video');
+      if (!v || !Number.isFinite(v.duration)) return;
+      const r = bar.getBoundingClientRect();
+      const frac = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
+      playerEl()?.seekTo?.(frac * v.duration, true);
+    };
+    bar.addEventListener('click', seekFromEvent);
+    bar.addEventListener('keydown', (e) => {
+      const v = playerEl()?.querySelector('video');
+      if (!v) return;
+      const step = e.key === 'ArrowRight' ? 5 : e.key === 'ArrowLeft' ? -5 : 0;
+      if (step) { e.preventDefault(); playerEl()?.seekTo?.(Math.max(0, v.currentTime + step), true); }
+    });
+
+    document.body.appendChild(root);
+    hero.el = root;
+    hero.parts = { title, sub, play, like, fill, bar, cur, dur };
+  }
+
+  function heroWanted() {
+    if (!designOn() || config.design !== 'nowplaying' || state.ad || !state.videoId) return null;
+    if (!HERO_PATHS(location.pathname)) return null;
+    if (document.querySelector('ytmusic-player-page[player-ui-state="PLAYER_PAGE_OPEN"]')) return null;
+    const browse = document.querySelector('ytmusic-browse-response');
+    if (!browse) return null;
+    const r = browse.getBoundingClientRect();
+    return r.width > 300 ? { browse, rect: r } : null;
+  }
+
+  function setHeroVisible(on) {
+    hero.visible = on;
+    document.documentElement?.classList.toggle('ytm-ao-hero-on', on);
+    if (hero.el) hero.el.hidden = !on;
+  }
+
+  /** Text, cover, play state and liked state: cheap, safe to call every tick. */
+  function updateHero() {
+    const want = heroWanted();
+    if (!want) { if (hero.visible) setHeroVisible(false); return; }
+    if (!hero.el) buildHero();
+    const p = hero.parts;
+    const info = trackText();
+    const cover = art.vid === state.videoId ? art.url : null;
+    const key = `${info.title}|${info.artist}|${info.year}|${cover}`;
+    if (key !== hero.key) {
+      hero.key = key;
+      p.title.textContent = info.title;
+      p.sub.textContent = [info.artist, info.year].filter(Boolean).join(' · ');
+      if (cover) hero.el.style.setProperty('--ao-cover', `url("${cover.replace(/"/g, '%22')}")`);
+    }
+    const v = playerEl()?.querySelector('video');
+    const playing = Boolean(v && !v.paused && !v.ended);
+    hero.el.classList.toggle('playing', playing);
+    p.play._path.setAttribute('d', playing ? ICONS.pause : ICONS.play);
+    p.play.setAttribute('aria-label', playing ? T.pause : T.play);
+    p.play.title = playing ? T.pause : T.play;
+    const liked = document.querySelector('ytmusic-player-bar ytmusic-like-button-renderer')?.getAttribute('like-status') === 'LIKE';
+    p.like.classList.toggle('on', liked);
+    p.like.setAttribute('aria-pressed', String(liked));
+    updateHeroProgress();
+    if (!hero.visible) setHeroVisible(true);
+    positionHero(want);
+  }
+
+  function updateHeroProgress() {
+    if (!hero.el || !hero.visible) return;
+    const v = playerEl()?.querySelector('video');
+    const d = v?.duration, c = v?.currentTime;
+    const frac = Number.isFinite(d) && d > 0 ? Math.min(1, c / d) : 0;
+    hero.parts.fill.style.width = `${(frac * 100).toFixed(2)}%`;
+    hero.parts.cur.textContent = fmtTime(c);
+    hero.parts.dur.textContent = fmtTime(d);
+    hero.parts.bar.setAttribute('aria-valuenow', String(Math.round(frac * 100)));
+  }
+
+  /**
+   * Place the hero at the top of the page content (it scrolls with the page),
+   * reserve its height in the page, and clip it under the top bar / above the
+   * player bar so it never covers them.
+   */
+  function positionHero(want = heroWanted()) {
+    if (!hero.el || !hero.visible || !want) return;
+    const { browse, rect } = want;
+    const cs = getComputedStyle(browse);
+    const padL = parseFloat(cs.paddingLeft) || 0;
+    const padR = parseFloat(cs.paddingRight) || 0;
+    const left = rect.left + window.scrollX + Math.max(padL, 24);
+    const width = Math.max(320, rect.width - Math.max(padL, 24) - Math.max(padR, 24));
+    // The content area can start behind the fixed top bar: never place the hero there.
+    const browseTop = rect.top + window.scrollY;
+    const navH = document.getElementById('nav-bar-background')?.offsetHeight || 64;
+    const top = Math.max(browseTop, navH) + 20;
+    const s = hero.el.style;
+    s.left = `${Math.round(left)}px`;
+    s.top = `${Math.round(top)}px`;
+    s.width = `${Math.round(width)}px`;
+    const reserve = Math.round(top - browseTop + hero.el.offsetHeight + 28);
+    if (reserve > 0 && Math.abs(reserve - hero.height) > 1) {
+      hero.height = reserve;
+      document.documentElement.style.setProperty('--ao-hero-h', `${reserve}px`);
+    }
+    clipHero();
+  }
+
+  function clipHero() {
+    if (!hero.el || !hero.visible) return;
+    const r = hero.el.getBoundingClientRect();
+    const navBottom = document.getElementById('nav-bar-background')?.getBoundingClientRect().bottom ?? 64;
+    const barTop = document.querySelector('ytmusic-player-bar')?.getBoundingClientRect().top ?? innerHeight;
+    const topCut = Math.max(0, navBottom - r.top);
+    const bottomCut = Math.max(0, r.bottom - barTop);
+    hero.el.style.clipPath = topCut || bottomCut ? `inset(${topCut}px 0 ${bottomCut}px 0)` : '';
+    // Menus and dialogs must stay on top: drop the hero behind the page while one is open.
+    const popupOpen = [...document.querySelectorAll('ytmusic-popup-container tp-yt-iron-dropdown, tp-yt-paper-dialog')]
+      .some((d) => { const b = d.getBoundingClientRect(); return b.width > 0 && b.height > 0 && getComputedStyle(d).display !== 'none'; });
+    hero.el.classList.toggle('under', popupOpen);
+  }
+
+  window.addEventListener('scroll', () => { if (hero.visible) requestAnimationFrame(clipHero); }, { passive: true });
+  window.addEventListener('resize', () => { if (hero.visible) requestAnimationFrame(() => positionHero()); }, { passive: true });
+  document.addEventListener('timeupdate', () => updateHeroProgress(), true);
+  document.addEventListener('click', () => { if (hero.visible) setTimeout(clipHero, 60); }, true);
+
   function setRootClasses() {
     const root = document.documentElement;
     if (!root) return;
     root.classList.toggle('ytm-ao-on', config.enabled);
     root.classList.toggle('ytm-ao-style', config.enabled && config.restyle);
     root.classList.toggle('ytm-ao-clean', designOn());
-    root.classList.toggle('ytm-ao-ambient', designOn() && config.design === 'ambient');
+    root.classList.toggle('ytm-ao-ambient', designOn() && usesAmbient());
+    root.classList.toggle('ytm-ao-np', designOn() && config.design === 'nowplaying');
     root.classList.toggle('ytm-ao-light', designOn() && isLight());
     root.classList.toggle('ytm-ao-ad', state.ad);
   }
@@ -862,6 +1080,7 @@
     try { updateArt(player); applyAmbient(); } catch (e) { log('artwork update failed', e); }
     try { hidePremium(); observePopups(); } catch (e) { log('clean-up failed', e); }
     try { updateMediaSession(player, player.querySelector('video')); } catch (e) { log('media session failed', e); }
+    try { updateHero(); } catch (e) { log('hero failed', e); }
     if (state.ticks % STATUS_EVERY_S === 0) sendStatus();
   }
 
@@ -920,7 +1139,7 @@
   if (globalThis.__YTM_AO_TEST__) {
     globalThis.__YTM_AO_TEST__.api = {
       pickBestAudio, pickCheapestVideo, patchAny, trackInfo, LEVEL,
-      getConfig: () => config, applyConfig, effectiveLevel, artCandidates, artShape, hidePremium, isLight, trackText, artworkFor, pickAccent, smallArt,
+      getConfig: () => config, applyConfig, effectiveLevel, artCandidates, artShape, hidePremium, isLight, trackText, artworkFor, pickAccent, smallArt, updateHero, hero, fmtTime,
     };
   }
 })();
