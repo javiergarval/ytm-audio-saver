@@ -955,15 +955,26 @@
 
   /** Left/right edges of the real content column (where the cards start), in page coordinates. */
   function contentEdges(browse, rect) {
-    // Union of the visible rows: a single row can be narrower than the column
-    // (Library's filter chips sit next to a sort dropdown).
-    let left = null, right = null, seen = 0;
+    // The column edge is the left edge most rows share. Single rows can be narrower
+    // (Library's filter chips sit next to a sort dropdown) or wider (full-bleed
+    // carousels on Explore), so neither the first row nor the union is reliable.
+    const rows = [];
     for (const row of browse.querySelectorAll(CONTENT_ROWS)) {
       const b = row.getBoundingClientRect();
       if (b.width < 300 || b.height <= 0) continue;
-      left = left === null ? b.left : Math.min(left, b.left);
-      right = right === null ? b.right : Math.max(right, b.right);
-      if (++seen >= 6) break;
+      rows.push(b);
+      if (rows.length >= 10) break;
+    }
+    let left = null, right = null;
+    if (rows.length) {
+      let best = rows[0].left, bestCount = 0;
+      for (const r of rows) {
+        const n = rows.filter((o) => Math.abs(o.left - r.left) < 12).length;
+        if (n > bestCount) { best = r.left; bestCount = n; }
+      }
+      const same = rows.filter((o) => Math.abs(o.left - best) < 12);
+      left = Math.min(...same.map((o) => o.left));
+      right = Math.max(...same.map((o) => o.right));
     }
     if (left === null) {
       const cs = getComputedStyle(browse);
