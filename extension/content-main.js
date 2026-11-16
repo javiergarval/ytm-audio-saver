@@ -930,10 +930,36 @@
     if (!designOn() || config.design !== 'nowplaying' || state.ad || !state.videoId) return null;
     if (!HERO_PATHS(location.pathname)) return null;
     if (document.querySelector('ytmusic-player-page[player-ui-state="PLAYER_PAGE_OPEN"]')) return null;
-    const browse = document.querySelector('ytmusic-browse-response');
-    if (!browse) return null;
-    const r = browse.getBoundingClientRect();
-    return r.width > 300 ? { browse, rect: r } : null;
+    // YouTube keeps earlier pages in the DOM, hidden: use the one actually on screen.
+    for (const browse of document.querySelectorAll('ytmusic-browse-response')) {
+      const r = browse.getBoundingClientRect();
+      if (r.width > 300 && r.height > 0) return { browse, rect: r };
+    }
+    return null;
+  }
+
+  const CONTENT_ROWS = 'ytmusic-chip-cloud-renderer, ytmusic-carousel-shelf-renderer, ytmusic-grid-renderer, '
+    + 'ytmusic-shelf-renderer, ytmusic-immersive-carousel-shelf-renderer, ytmusic-section-list-renderer #contents > *';
+
+  /** Left/right edges of the real content column (where the cards start), in page coordinates. */
+  function contentEdges(browse, rect) {
+    let left = null, right = null;
+    for (const row of browse.querySelectorAll(CONTENT_ROWS)) {
+      const b = row.getBoundingClientRect();
+      if (b.width < 300 || b.height <= 0) continue;
+      left = b.left; right = b.right;
+      break;
+    }
+    if (left === null) {
+      const cs = getComputedStyle(browse);
+      left = rect.left + Math.max(parseFloat(cs.paddingLeft) || 0, 24);
+      right = rect.right - Math.max(parseFloat(cs.paddingRight) || 0, 24);
+    }
+    // Never sit on top of the side menu (Home / Explore / Library).
+    const guide = document.getElementById('guide-wrapper') || document.getElementById('guide');
+    const g = guide?.getBoundingClientRect();
+    if (g && g.width > 0 && g.right > 0 && g.right < innerWidth / 2) left = Math.max(left, g.right + 24);
+    return { left: left + window.scrollX, width: Math.max(320, right - left) };
   }
 
   function setHeroVisible(on) {
@@ -990,11 +1016,7 @@
   function positionHero(want = heroWanted()) {
     if (!hero.el || !hero.visible || !want) return;
     const { browse, rect } = want;
-    const cs = getComputedStyle(browse);
-    const padL = parseFloat(cs.paddingLeft) || 0;
-    const padR = parseFloat(cs.paddingRight) || 0;
-    const left = rect.left + window.scrollX + Math.max(padL, 24);
-    const width = Math.max(320, rect.width - Math.max(padL, 24) - Math.max(padR, 24));
+    const { left, width } = contentEdges(browse, rect);
     // The content area can start behind the fixed top bar: never place the hero there.
     const browseTop = rect.top + window.scrollY;
     const navH = document.getElementById('nav-bar-background')?.offsetHeight || 64;
@@ -1022,7 +1044,9 @@
     // Menus and dialogs must stay on top: drop the hero behind the page while one is open.
     const popupOpen = [...document.querySelectorAll('ytmusic-popup-container tp-yt-iron-dropdown, tp-yt-paper-dialog')]
       .some((d) => { const b = d.getBoundingClientRect(); return b.width > 0 && b.height > 0 && getComputedStyle(d).display !== 'none'; });
-    hero.el.classList.toggle('under', popupOpen);
+    const drawer = document.querySelector('tp-yt-app-drawer#guide[opened]');
+    const drawerOver = !!drawer && drawer.getBoundingClientRect().right > r.left + 4;
+    hero.el.classList.toggle('under', popupOpen || drawerOver);
   }
 
   window.addEventListener('scroll', () => { if (hero.visible) requestAnimationFrame(clipHero); }, { passive: true });
