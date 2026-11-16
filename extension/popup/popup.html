@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>YTM Audio Saver</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header>
+    <span class="title">YTM Audio Saver</span>
+    <label class="switch" title="On / off">
+      <input type="checkbox" id="enabled" role="switch" aria-label="Enabled">
+      <span class="track" aria-hidden="true"></span>
+    </label>
+  </header>
+
+  <main>
+    <span class="dot" id="dot" aria-hidden="true"></span>
+    <div>
+      <p class="headline" id="headline">Not playing</p>
+      <p class="detail" id="detail">Open YouTube Music and play a song</p>
+    </div>
+  </main>
+
+  <p class="hint" id="hint" hidden>
+    Applies from the next song. <button type="button" class="link" id="reload">Reload now</button>
+  </p>
+
+  <details id="advanced">
+    <summary>Advanced</summary>
+
+    <div class="seg" role="radiogroup" aria-label="Mode">
+      <label><input type="radio" name="level" value="0"><span>Strict</span></label>
+      <label><input type="radio" name="level" value="1"><span>Block</span></label>
+      <label><input type="radio" name="level" value="2"><span>Minimal</span></label>
+    </div>
+    <p class="muted" id="mode-desc"></p>
+
+    <label class="check">
+      <input type="checkbox" id="restyle">
+      <span>Album-art player (blurred background)</span>
+    </label>
+
+    <label class="check">
+      <input type="checkbox" id="autoLearn">
+      <span>Step down automatically if playback breaks</span>
+    </label>
+
+    <dl>
+      <dt>Video kept</dt><dd id="s-video">–</dd>
+      <dt>Blocked</dt><dd id="s-blocked">–</dd>
+      <dt>Protocol</dt><dd id="s-proto">–</dd>
+    </dl>
+
+    <button type="button" class="link" id="retest">Reset to Strict</button>
+  </details>
+
+  <script src="popup.js"></script>
+</body>
+</html>

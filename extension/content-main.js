@@ -1,0 +1,706 @@
+/*
+ * YTM Audio Saver: content-main.js
+ * ---------------------------------------------------------------------------
+ * Runs in the PAGE's own JavaScript world ("world": "MAIN") at document_start,
+ * i.e. before any YouTube Music script executes. Firefox injects MAIN-world
+ * content scripts itself, so the page's CSP / Trusted Types cannot block it
+ * (this is the main reason this is an extension and not a userscript).
+ *
+ * What it does:
+ *   1. FORMAT REWRITE: every player response that passes through JSON.parse,
+ *      Response.json(), XHR(json) or window.ytInitialPlayerResponse gets its
+ *      streamingData.adaptiveFormats reduced to:
+ *        - the single best free audio format (251 Opus > 140 AAC > ...), and
+ *        - depending on the level, zero or one (the cheapest) video format.
+ *   2. SELF-HEALING LADDER: blocking video can make some player builds stall.
+ *      A watchdog detects stalls and steps down, learning what works:
+ *        STRICT  (0): audio-only formats + video requests blocked  -> 0 video bytes
+ *        BLOCK   (1): audio + 1 tiny video format, video blocked   -> 0 video bytes
+ *        MINIMAL (2): audio + 1 tiny video format, nothing blocked -> ~144p video only
+ *      A level is only demoted permanently after failures on 2 different
+ *      tracks with no successful track in between (one-off network hiccups
+ *      do not demote you). You can re-test from the toolbar popup.
+ *   3. CLEAN UI: html.ytm-ao-on lets content.css hide #song-video and show
+ *      #song-image; this script fills #song-image with the sharpest artwork
+ *      available. html.ytm-ao-style adds the album-art look (centered art over
+ *      a blurred copy of itself); it can be switched off in the popup.
+ *      During ads nothing is hidden or blocked (skip buttons stay usable).
+ *   4. SPA RESILIENCE: hooks are global and permanent; a 1 s watchdog plus
+ *      yt-navigate-finish / MutationObserver handle track & page changes.
+ *
+ * This world has NO WebExtension APIs. It talks to content-bridge.js
+ * (isolated world) through window.postMessage.
+ */
+(() => {
+  'use strict';
+
+  if (window.__ytmAoInstalled) return;
+  Object.defineProperty(window, '__ytmAoInstalled', { value: true });
+
+  // ---------------------------------------------------------------------------
+  // Constants
+  // ---------------------------------------------------------------------------
+  const MSG_FROM_MAIN = 'ytm-ao-main';
+  const MSG_FROM_BRIDGE = 'ytm-ao-bridge';
+
+  const LS_CONFIG = 'ytm-ao-config';          // mirror of extension storage (sync read at startup)
+  const LS_STRIKES = 'ytm-ao-strikes';        // tracks that failed per level
+  const SS_SESSION_LEVEL = 'ytm-ao-session-level'; // per-tab temporary demotion
+  const SS_LAST_RELOAD = 'ytm-ao-last-reload';
+
+  const LEVEL = Object.freeze({ STRICT: 0, BLOCK: 1, MINIMAL: 2 });
+  const LEVEL_NAMES = ['strict', 'block', 'minimal'];
+  const DEFAULT_CONFIG = Object.freeze({ enabled: true, level: LEVEL.STRICT, autoLearn: true, restyle: true });
+
+  // Audio itag preference. 774 (Opus ~256k) and 141 (AAC 256k) are Premium-only:
+  // they never appear for free accounts, they are listed so the order stays correct
+  // if they ever do. For free accounts the effective choice is 251 (Opus) or 140 (AAC).
+  const AUDIO_ITAG_PRIORITY = [774, 141, 251, 140, 250, 249, 139];
+
+  const TICK_MS = 1000;
+  const STALL_LIMIT_S = 8;           // seconds "playing" without progress => stall
+  const ERROR_LIMIT_S = 2;           // seconds with a visible player error => stall
+  const CLEAN_PLAY_CONFIRM_S = 20;   // seconds of clean playback that prove a level works
+  const STRIKES_TO_DEMOTE = 2;       // distinct failing tracks before a permanent demotion
+  const MIN_RELOAD_INTERVAL_MS = 60_000;
+  const STATUS_EVERY_S = 10;
+  const ALLOW_HEARTBEAT_MS = 30_000;
+
+  // Keep native references BEFORE we patch anything.
+  const nativeParse = JSON.parse;
+  const nativeStringify = JSON.stringify;
+
+  // ---------------------------------------------------------------------------
+  // Storage helpers (localStorage can throw if cookies/site data are blocked)
+  // ---------------------------------------------------------------------------
+  function safeStorage(name) {
+    try {
+      const s = window[name];
+      s.getItem('__ytm_ao_probe__');
+      return s;
+    } catch {
+      const m = new Map();
+      return {
+        getItem: (k) => (m.has(k) ? m.get(k) : null),
+        setItem: (k, v) => void m.set(k, String(v)),
+        removeItem: (k) => void m.delete(k),
+      };
+    }
+  }
+  const LS = safeStorage('localStorage');
+  const SS = safeStorage('sessionStorage');
+
+  const readJSON = (store, key, fallback) => {
+    try {
+      const raw = store.getItem(key);
+      return raw ? nativeParse(raw) : fallback;
+    } catch {
+      return fallback;
+    }
+  };
+  const writeJSON = (store, key, value) => {
+    try { store.setItem(key, nativeStringify(value)); } catch { /* quota / disabled */ }
+  };
+
+  const clampLevel = (n) => Math.min(LEVEL.MINIMAL, Math.max(LEVEL.STRICT, Number(n) || 0));
+
+  function sanitizeConfig(c) {
+    const src = c && typeof c === 'object' ? c : {};
+    return {
+      enabled: typeof src.enabled === 'boolean' ? src.enabled : DEFAULT_CONFIG.enabled,
+      level: clampLevel(src.level ?? DEFAULT_CONFIG.level),
+      autoLearn: typeof src.autoLearn === 'boolean' ? src.autoLearn : DEFAULT_CONFIG.autoLearn,
+      restyle: typeof src.restyle === 'boolean' ? src.restyle : DEFAULT_CONFIG.restyle,
+    };
+  }
+
+  let config = sanitizeConfig(readJSON(LS, LS_CONFIG, DEFAULT_CONFIG));
+
+  /** Level applied to NEW player responses: persisted level, possibly raised for this tab. */
+  function effectiveLevel() {
+    return Math.max(config.level, clampLevel(SS.getItem(SS_SESSION_LEVEL)));
+  }
+
+  const log = (...a) => console.debug('[YTM Audio Saver]', ...a);
+
+  // ---------------------------------------------------------------------------
+  // Messaging with content-bridge.js
+  // ---------------------------------------------------------------------------
+  const post = (type, payload = {}) => {
+    try { window.postMessage({ source: MSG_FROM_MAIN, type, ...payload }, location.origin); } catch { /* ignore */ }
+  };
+
+  // ---------------------------------------------------------------------------
+  // 1. Format selection & player-response rewrite
+  // ---------------------------------------------------------------------------
+  const isAudio = (f) => typeof f?.mimeType === 'string' && f.mimeType.startsWith('audio/');
+  const isVideo = (f) => typeof f?.mimeType === 'string' && f.mimeType.startsWith('video/');
+  const bitrateOf = (f) => Number(f?.averageBitrate || f?.bitrate || 0);
+  const preferNonEmpty = (filtered, original) => (filtered.length ? filtered : original);
+
+  function canPlay(mime) {
+    try {
+      return typeof MediaSource === 'undefined' || !mime || MediaSource.isTypeSupported(mime);
+    } catch {
+      return true;
+    }
+  }
+
+  /** Best audio: default language track, non-"stable volume" (DRC), decodable, by itag priority then bitrate. */
+  function pickBestAudio(formats) {
+    let list = formats.filter(isAudio);
+    if (!list.length) return null;
+    if (list.some((f) => f.audioTrack)) {
+      list = preferNonEmpty(list.filter((f) => f.audioTrack?.audioIsDefault), list);
+    }
+    list = preferNonEmpty(list.filter((f) => !f.isDrc), list);
+    list = preferNonEmpty(list.filter((f) => canPlay(f.mimeType)), list);
+    const rank = (f) => {
+      const i = AUDIO_ITAG_PRIORITY.indexOf(Number(f.itag));
+      return i === -1 ? AUDIO_ITAG_PRIORITY.length : i;
+    };
+    return [...list].sort((a, b) => rank(a) - rank(b) || bitrateOf(b) - bitrateOf(a))[0];
+  }
+
+  /**
+   * Cheapest video to fetch AND decode: lowest resolution first, then H.264
+   * (cheapest to decode, usually hardware), then VP9, then AV1, then bitrate.
+   */
+  function pickCheapestVideo(formats) {
+    let list = formats.filter(isVideo);
+    if (!list.length) return null;
+    list = preferNonEmpty(list.filter((f) => canPlay(f.mimeType)), list);
+    const pixels = (f) => Number(f.width || 0) * Number(f.height || 0) || Number.MAX_SAFE_INTEGER;
+    const codecCost = (f) => (/avc1/.test(f.mimeType) ? 0 : /vp0?9/.test(f.mimeType) ? 1 : 2);
+    return [...list].sort(
+      (a, b) => pixels(a) - pixels(b) || codecCost(a) - codecCost(b) || bitrateOf(a) - bitrateOf(b)
+    )[0];
+  }
+
+  const patched = new WeakSet();
+  const trackInfo = new Map(); // videoId -> what we did to its player response
+  const artByVid = new Map();  // videoId -> best artwork URL
+
+  function remember(map, key, value, max = 60) {
+    map.set(key, value);
+    if (map.size > max) map.delete(map.keys().next().value);
+  }
+
+  function normalizeArtUrl(u) {
+    if (!u) return null;
+    try {
+      const url = new URL(u, location.href);
+      // i.ytimg.com query strings are crop/resize parameters; the bare file is full size.
+      if (url.hostname.endsWith('ytimg.com')) url.search = '';
+      return url.href;
+    } catch {
+      return null;
+    }
+  }
+
+  function largestThumb(list) {
+    if (!Array.isArray(list) || !list.length) return null;
+    const area = (t) => Number(t?.width || 0) * Number(t?.height || 0);
+    return normalizeArtUrl([...list].sort((a, b) => area(b) - area(a))[0]?.url);
+  }
+
+  function patchPlayerResponse(pr) {
+    if (!config.enabled || !pr || typeof pr !== 'object' || patched.has(pr)) return;
+    const sd = pr.streamingData;
+    if (!sd || !Array.isArray(sd.adaptiveFormats) || !sd.adaptiveFormats.length) return;
+    patched.add(pr);
+
+    const vd = pr.videoDetails || {};
+    if (vd.videoId) {
+      const art = largestThumb(vd.thumbnail?.thumbnails);
+      if (art) remember(artByVid, vd.videoId, art);
+    }
+
+    // Leave live streams and unplayable responses untouched.
+    if (vd.isLive || sd.hlsManifestUrl) return;
+    if (pr.playabilityStatus && pr.playabilityStatus.status !== 'OK') return;
+
+    const level = effectiveLevel();
+    const audio = pickBestAudio(sd.adaptiveFormats);
+    if (!audio) return; // no audio-only stream: never break playback
+
+    const video = level === LEVEL.STRICT ? null : pickCheapestVideo(sd.adaptiveFormats);
+    const before = sd.adaptiveFormats.length;
+    sd.adaptiveFormats = video ? [video, audio] : [audio];
+    // In STRICT mode also drop the muxed progressive fallback (e.g. itag 18),
+    // otherwise the player could fall back to a 360p audio+video file.
+    if (level === LEVEL.STRICT && 'formats' in sd) delete sd.formats;
+
+    const info = {
+      level,
+      audioItag: Number(audio.itag),
+      audioMime: audio.mimeType,
+      audioKbps: Math.round(bitrateOf(audio) / 1000),
+      videoItag: video ? Number(video.itag) : null,
+      videoLabel: video ? `${video.qualityLabel || `${video.height || '?'}p`} ${String(video.mimeType).split(';')[0]}` : null,
+      // SABR = YouTube's newer single-request protocol. When present, network
+      // blocking by "mime=video" cannot work and only the format rewrite helps.
+      sabr: Boolean(sd.serverAbrStreamingUrl),
+    };
+    if (vd.videoId) remember(trackInfo, vd.videoId, info);
+    log(`patched ${vd.videoId || '?'}: ${before} -> ${sd.adaptiveFormats.length} formats`, info);
+  }
+
+  /** Accepts any parsed JSON value; patches player responses found at known spots. */
+  function patchAny(value) {
+    if (!value || typeof value !== 'object') return value;
+    try {
+      if (value.streamingData && (value.videoDetails || value.playabilityStatus)) {
+        patchPlayerResponse(value);
+      }
+      if (value.playerResponse?.streamingData) patchPlayerResponse(value.playerResponse);
+      if (Array.isArray(value)) {
+        for (const item of value) {
+          if (item?.playerResponse?.streamingData) patchPlayerResponse(item.playerResponse);
+        }
+      }
+    } catch (e) {
+      console.warn('[YTM Audio Saver] patch failed (playback left untouched):', e);
+    }
+    return value;
+  }
+
+  // --- Hook 1: JSON.parse (covers text responses, embedded initialData strings) ---
+  const wrappedParse = function parse(text, reviver) {
+    const result = nativeParse.apply(this, arguments);
+    if (result && typeof result === 'object' &&
+        ('streamingData' in result || 'playerResponse' in result || Array.isArray(result))) {
+      patchAny(result);
+    }
+    return result;
+  };
+  try {
+    Object.defineProperty(JSON, 'parse', { value: wrappedParse, writable: true, configurable: true });
+  } catch { JSON.parse = wrappedParse; }
+
+  // --- Hook 2: fetch Response.json() ---
+  try {
+    const nativeJson = Response.prototype.json;
+    Object.defineProperty(Response.prototype, 'json', {
+      configurable: true,
+      writable: true,
+      value: function json() {
+        return nativeJson.apply(this, arguments).then(patchAny);
+      },
+    });
+  } catch (e) { log('Response.json hook unavailable', e); }
+
+  // --- Hook 3: XMLHttpRequest with responseType = "json" ---
+  try {
+    const desc = Object.getOwnPropertyDescriptor(XMLHttpRequest.prototype, 'response');
+    if (desc && typeof desc.get === 'function') {
+      Object.defineProperty(XMLHttpRequest.prototype, 'response', {
+        configurable: true,
+        enumerable: desc.enumerable,
+        get() {
+          const v = desc.get.call(this);
+          if (this.responseType === 'json') patchAny(v);
+          return v;
+        },
+      });
+    }
+  } catch (e) { log('XHR hook unavailable', e); }
+
+  // --- Hook 4: object-literal globals assigned by inline scripts ---
+  try {
+    let initialPR;
+    Object.defineProperty(window, 'ytInitialPlayerResponse', {
+      configurable: true,
+      enumerable: true,
+      get: () => initialPR,
+      set: (v) => { initialPR = patchAny(v); },
+    });
+  } catch (e) { log('ytInitialPlayerResponse hook unavailable', e); }
+
+  // ---------------------------------------------------------------------------
+  // 2. Watchdog / self-healing ladder
+  // ---------------------------------------------------------------------------
+  const state = {
+    videoId: null,
+    ad: false,
+    lastTime: -1,
+    stallSecs: 0,
+    stallEvents: 0,
+    cleanSecs: 0,
+    tempAllow: false,     // video temporarily allowed for this track (recovery)
+    allowSent: null,
+    allowSentAt: 0,
+    ticks: 0,
+    observedPlayer: null,
+  };
+
+  const trackLevel = (vid) => trackInfo.get(vid)?.level ?? effectiveLevel();
+
+  function computeAllow() {
+    return !config.enabled || trackLevel(state.videoId) >= LEVEL.MINIMAL || state.ad || state.tempAllow;
+  }
+
+  function syncAllow(force = false) {
+    const allowed = computeAllow();
+    const now = Date.now();
+    if (force || allowed !== state.allowSent || now - state.allowSentAt > ALLOW_HEARTBEAT_MS) {
+      post('allowVideo', { allowed });
+      state.allowSent = allowed;
+      state.allowSentAt = now;
+    }
+  }
+
+  function sendStatus() {
+    const info = trackInfo.get(state.videoId) || null;
+    post('status', {
+      status: {
+        enabled: config.enabled,
+        videoId: state.videoId,
+        level: LEVEL_NAMES[trackLevel(state.videoId)],
+        configLevel: LEVEL_NAMES[config.level],
+        autoLearn: config.autoLearn,
+        audioItag: info?.audioItag ?? null,
+        audioMime: info?.audioMime ?? null,
+        audioKbps: info?.audioKbps ?? null,
+        videoItag: info?.videoItag ?? null,
+        videoLabel: info?.videoLabel ?? null,
+        sabr: info ? info.sabr : null,
+        patched: Boolean(info),
+        tempAllow: state.tempAllow,
+        ad: state.ad,
+      },
+    });
+  }
+
+  function strikes() {
+    const s = readJSON(LS, LS_STRIKES, {});
+    return { strict: Array.isArray(s.strict) ? s.strict : [], block: Array.isArray(s.block) ? s.block : [] };
+  }
+  function addStrike(kind, vid) {
+    const s = strikes();
+    if (!s[kind].includes(vid)) s[kind].push(vid);
+    s[kind] = s[kind].slice(-10);
+    writeJSON(LS, LS_STRIKES, s);
+    return s[kind].length;
+  }
+  function clearStrikes(kind) {
+    const s = strikes();
+    if (!s[kind].length) return;
+    s[kind] = [];
+    writeJSON(LS, LS_STRIKES, s);
+  }
+
+  /** Persistently step down (only if auto-learn is on). */
+  function demote(toLevel) {
+    if (!config.autoLearn || toLevel <= config.level) return;
+    log(`demoting to "${LEVEL_NAMES[toLevel]}" (blocking broke playback on ${STRIKES_TO_DEMOTE} tracks)`);
+    config = { ...config, level: toLevel };
+    writeJSON(LS, LS_CONFIG, config);
+    post('setLevel', { level: toLevel });
+  }
+
+  function nudge(player, video) {
+    try {
+      const t = typeof player.getCurrentTime === 'function' ? player.getCurrentTime() : video.currentTime;
+      const target = Math.max(0, Number(t) - 0.25);
+      if (typeof player.seekTo === 'function') player.seekTo(target, true);
+      else video.currentTime = target;
+      if (video.paused && typeof player.playVideo === 'function') player.playVideo();
+    } catch (e) { log('nudge failed', e); }
+  }
+
+  /** Reload the tab so a fresh player response is built at a safer level. */
+  function reloadAtLevel(level, player, video) {
+    const last = Number(SS.getItem(SS_LAST_RELOAD)) || 0;
+    if (Date.now() - last < MIN_RELOAD_INTERVAL_MS) {
+      // Never loop reloads: just let video through for this track.
+      state.tempAllow = true;
+      syncAllow(true);
+      nudge(player, video);
+      return;
+    }
+    SS.setItem(SS_SESSION_LEVEL, String(Math.max(level, clampLevel(SS.getItem(SS_SESSION_LEVEL)))));
+    SS.setItem(SS_LAST_RELOAD, String(Date.now()));
+    log(`reloading at level "${LEVEL_NAMES[level]}" to recover playback`);
+    location.reload();
+  }
+
+  function handleStall(player, video) {
+    const vid = state.videoId;
+    if (!vid) return;
+    state.stallEvents++;
+    const lvl = trackLevel(vid);
+    log(`stall #${state.stallEvents} on ${vid} at level "${LEVEL_NAMES[lvl]}"${state.ad ? ' (ad)' : ''}`);
+
+    // Ads: video is already allowed; give the player one poke before treating it as our fault.
+    if (state.ad && state.stallEvents === 1) { nudge(player, video); return; }
+
+    if (lvl === LEVEL.STRICT) {
+      // Player could not cope with an audio-only format list: rebuild the response at BLOCK.
+      if (addStrike('strict', vid) >= STRIKES_TO_DEMOTE) demote(LEVEL.BLOCK);
+      reloadAtLevel(LEVEL.BLOCK, player, video);
+      return;
+    }
+    if (lvl === LEVEL.BLOCK) {
+      if (!state.tempAllow) {
+        // First try: let video through for this track and poke the player.
+        state.tempAllow = true;
+        syncAllow(true);
+        sendStatus();
+        if (addStrike('block', vid) >= STRIKES_TO_DEMOTE) demote(LEVEL.MINIMAL);
+        setTimeout(() => nudge(player, video), 300);
+        return;
+      }
+      // Still stuck even with video allowed: the player gave up; rebuild at MINIMAL.
+      reloadAtLevel(LEVEL.MINIMAL, player, video);
+      return;
+    }
+    // MINIMAL blocks nothing, so a stall here is the network, not us.
+    nudge(player, video);
+  }
+
+  function onTrackChange(vid) {
+    state.videoId = vid;
+    state.lastTime = -1;
+    state.stallSecs = 0;
+    state.stallEvents = 0;
+    state.cleanSecs = 0;
+    state.tempAllow = false;
+    syncAllow(true);
+    sendStatus();
+  }
+
+  function isErrorVisible(player) {
+    const el = player.querySelector('.ytp-error');
+    return Boolean(el && el.textContent && el.textContent.trim());
+  }
+
+  function watchPlayback(player) {
+    const video = player.querySelector('video');
+    if (!video || !state.videoId) return;
+    const t = video.currentTime;
+    const progressed = state.lastTime >= 0 && Math.abs(t - state.lastTime) > 0.05;
+    state.lastTime = t;
+
+    if (!config.enabled || !trackInfo.has(state.videoId)) { state.stallSecs = 0; return; }
+
+    if (progressed) {
+      state.stallSecs = 0;
+      if (!state.ad && ++state.cleanSecs === CLEAN_PLAY_CONFIRM_S && state.stallEvents === 0) {
+        // This level demonstrably works: forget earlier failures.
+        const lvl = trackLevel(state.videoId);
+        if (lvl === LEVEL.STRICT) clearStrikes('strict');
+        if (lvl <= LEVEL.BLOCK && !state.tempAllow) clearStrikes('block');
+      }
+      return;
+    }
+
+    const error = isErrorVisible(player);
+    const wantsToPlay = !video.paused && !video.ended;
+    if (!wantsToPlay && !error) { state.stallSecs = 0; return; } // user paused / autoplay blocked
+
+    state.stallSecs++;
+    if (state.stallSecs >= (error ? ERROR_LIMIT_S : STALL_LIMIT_S)) {
+      state.stallSecs = 0;
+      handleStall(player, video);
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // 3. Clean UI (artwork in #song-image; CSS lives in content.css)
+  // ---------------------------------------------------------------------------
+  function artFor(player, vid) {
+    try {
+      const pr = typeof player.getPlayerResponse === 'function' ? player.getPlayerResponse() : null;
+      if (pr?.videoDetails?.videoId === vid) {
+        const u = largestThumb(pr.videoDetails.thumbnail?.thumbnails);
+        if (u) return u;
+      }
+    } catch { /* ignore */ }
+    return artByVid.get(vid) || `https://i.ytimg.com/vi/${encodeURIComponent(vid)}/hqdefault.jpg`;
+  }
+
+  // --- Artwork upgrade: try sharper sources first, keep the first that really loads ---
+  const LH3_SIZE = /=w\d+-h\d+/;
+  const LETTERBOX_FILE = /\/(?:hq|sd)?default\.jpg$|\/[0-3]\.jpg$/; // 4:3 files with black bars
+
+  /** Ordered candidate URLs, sharpest first. */
+  function artCandidates(base, vid) {
+    const id = encodeURIComponent(vid);
+    const list = [];
+    if (/googleusercontent\.com/.test(base) && LH3_SIZE.test(base)) {
+      list.push(base.replace(LH3_SIZE, '=w1200-h1200')); // album art (song tracks)
+    } else if (!/googleusercontent\.com/.test(base)) {
+      list.push(`https://i.ytimg.com/vi/${id}/maxresdefault.jpg`, `https://i.ytimg.com/vi/${id}/hq720.jpg`);
+    }
+    list.push(base, `https://i.ytimg.com/vi/${id}/hqdefault.jpg`);
+    return [...new Set(list.filter(Boolean))];
+  }
+
+  /** "square" | "wide" | "letterbox" (4:3 file holding a 16:9 picture between black bars). */
+  function artShape(url, w, h) {
+    const r = w && h ? w / h : 1;
+    let path = '';
+    try { path = new URL(url).pathname; } catch { /* keep '' */ }
+    if (/ytimg\.com/.test(url) && LETTERBOX_FILE.test(path) && r > 1.25 && r < 1.4) return 'letterbox';
+    return r > 1.2 ? 'wide' : 'square';
+  }
+
+  /** Loads candidates in order; YouTube serves a 120x90 placeholder for missing sizes, so skip those. */
+  function resolveArt(candidates) {
+    return new Promise((resolve) => {
+      let i = 0;
+      const next = () => {
+        if (i >= candidates.length) { resolve(null); return; }
+        const url = candidates[i++];
+        const probe = new Image();
+        probe.onload = () => (probe.naturalWidth > 120
+          ? resolve({ url, shape: artShape(url, probe.naturalWidth, probe.naturalHeight) })
+          : next());
+        probe.onerror = next;
+        probe.src = url;
+      };
+      next();
+    });
+  }
+
+  const art = { vid: null, url: null, shape: 'square', resolving: null };
+
+  function updateArt(player) {
+    if (!config.enabled || !state.videoId) return;
+    const vid = state.videoId;
+    if (art.vid !== vid) {
+      // Show the response's thumbnail immediately, then swap in a sharper one if it exists.
+      const base = artFor(player, vid);
+      Object.assign(art, { vid, url: base, shape: artShape(base, 4, 3) === 'letterbox' ? 'letterbox' : 'square' });
+      if (art.resolving !== vid) {
+        art.resolving = vid;
+        resolveArt(artCandidates(base, vid)).then((best) => {
+          if (best && art.vid === vid) Object.assign(art, best);
+          paintArt();
+        });
+      }
+    }
+    paintArt();
+  }
+
+  /** Cheap and idempotent: re-applied every tick in case YouTube Music re-renders the element. */
+  function paintArt() {
+    const box = document.querySelector('ytmusic-player #song-image');
+    const img = box && box.querySelector('img');
+    if (!img || !art.url || art.vid !== state.videoId) return;
+    if (img.getAttribute('src') !== art.url) {
+      img.removeAttribute('srcset');
+      img.setAttribute('src', art.url);
+    }
+    if (img.dataset.ytmAoShape !== art.shape) img.dataset.ytmAoShape = art.shape;
+    const cssUrl = `url("${art.url.replace(/"/g, '%22')}")`;
+    if (box.style.getPropertyValue('--ytm-ao-art') !== cssUrl) box.style.setProperty('--ytm-ao-art', cssUrl);
+  }
+
+  function setRootClasses() {
+    const root = document.documentElement;
+    if (!root) return;
+    root.classList.toggle('ytm-ao-on', config.enabled);
+    root.classList.toggle('ytm-ao-style', config.enabled && config.restyle);
+    root.classList.toggle('ytm-ao-ad', state.ad);
+  }
+
+  function readAdState(player) {
+    const ad = player.classList.contains('ad-showing') || player.classList.contains('ad-interrupting');
+    if (ad !== state.ad) {
+      state.ad = ad;
+      setRootClasses();
+      syncAllow(true);
+      sendStatus();
+    }
+  }
+
+  /** React to ad start/end instantly instead of waiting for the next tick. */
+  function observePlayer(player) {
+    if (state.observedPlayer === player) return;
+    state.observedPlayer = player;
+    new MutationObserver(() => readAdState(player))
+      .observe(player, { attributes: true, attributeFilter: ['class'] });
+  }
+
+  // ---------------------------------------------------------------------------
+  // 4. Main loop + SPA hooks
+  // ---------------------------------------------------------------------------
+  function tick() {
+    state.ticks++;
+    setRootClasses();
+    const player = document.getElementById('movie_player');
+    if (!player) { syncAllow(); return; }
+    observePlayer(player);
+    readAdState(player);
+
+    let vid = null;
+    try { vid = typeof player.getVideoData === 'function' ? player.getVideoData()?.video_id : null; } catch { /* ignore */ }
+    if (vid && vid !== state.videoId) onTrackChange(vid);
+
+    syncAllow();
+    watchPlayback(player); // first: playback recovery must never depend on cosmetics
+    try { updateArt(player); } catch (e) { log('artwork update failed', e); }
+    if (state.ticks % STATUS_EVERY_S === 0) sendStatus();
+  }
+
+  function safeTick() {
+    try { tick(); } catch (e) { console.warn('[YTM Audio Saver] tick error', e); }
+  }
+
+  function applyConfig(c) {
+    const next = sanitizeConfig(c);
+    const levelLowered = next.level < config.level;
+    config = next;
+    writeJSON(LS, LS_CONFIG, config);
+    if (levelLowered) SS.removeItem(SS_SESSION_LEVEL);
+    syncAllow(true);
+    safeTick();
+    sendStatus();
+  }
+
+  window.addEventListener('message', (e) => {
+    if (e.source !== window || e.origin !== location.origin) return;
+    const d = e.data;
+    if (!d || d.source !== MSG_FROM_BRIDGE) return;
+    switch (d.type) {
+      case 'config':
+        applyConfig(d.config);
+        break;
+      case 'hello':
+        post('ready');
+        syncAllow(true);
+        sendStatus();
+        break;
+      case 'resetLearning':
+        writeJSON(LS, LS_STRIKES, { strict: [], block: [] });
+        SS.removeItem(SS_SESSION_LEVEL);
+        SS.removeItem(SS_LAST_RELOAD);
+        sendStatus();
+        break;
+      default:
+        break;
+    }
+  });
+
+  for (const evt of ['yt-navigate-finish', 'yt-page-data-updated']) {
+    document.addEventListener(evt, safeTick, true);
+  }
+  // Media events bubble-less: capture phase on document catches every <video>.
+  for (const evt of ['loadstart', 'loadeddata', 'emptied', 'playing']) {
+    document.addEventListener(evt, safeTick, true);
+  }
+
+  setInterval(safeTick, TICK_MS);
+  post('ready');
+  syncAllow(true);
+
+  // Test hook for the bundled Node test (absent in a real browser page).
+  if (globalThis.__YTM_AO_TEST__) {
+    globalThis.__YTM_AO_TEST__.api = {
+      pickBestAudio, pickCheapestVideo, patchAny, trackInfo, LEVEL,
+      getConfig: () => config, applyConfig, effectiveLevel, artCandidates, artShape,
+    };
+  }
+})();
