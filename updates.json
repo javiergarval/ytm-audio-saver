@@ -3,9 +3,9 @@
     "{c83e3d5a-dd07-4678-a532-e6fcac0dacbc}": {
       "updates": [
         {
-          "version": "1.0.5",
-          "update_link": "https://github.com/javiergarval/ytm-audio-saver/releases/download/v1.0.5/ytm-audio-saver-1.0.5.xpi",
-          "update_hash": "sha256:a189a58e7131a2989263a0c3316b22441d0d1655f1e5b52aec6f0d6b992e9ec9"
+          "version": "1.0.7",
+          "update_link": "https://github.com/javiergarval/ytm-audio-saver/releases/download/v1.0.7/ytm-audio-saver-1.0.7.xpi",
+          "update_hash": "sha256:89c79689eaa97c4b029862fe188769dd23466b582ba7925349d1be6fc06da56a"
         }
       ]
     }
