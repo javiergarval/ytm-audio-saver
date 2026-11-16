@@ -664,6 +664,80 @@
     new MutationObserver(() => hidePremium(popups)).observe(popups, { childList: true, subtree: true });
   }
 
+  // ---------------------------------------------------------------------------
+  // macOS "Now Playing" / media keys (Media Session API)
+  // Gives the system the square cover, track position, and working
+  // previous / next / seek controls, all driven through the page's own player.
+  // ---------------------------------------------------------------------------
+  const media = { key: null, handlers: false, lastPos: 0 };
+
+  function clickPlayerBar(cls) {
+    const el = document.querySelector(`ytmusic-player-bar ${cls}`);
+    if (!el) return false;
+    (el.querySelector('button') || el).click();
+    return true;
+  }
+
+  function setMediaHandlers(player) {
+    const ms = navigator.mediaSession;
+    const on = (action, fn) => { try { ms.setActionHandler(action, fn); } catch { /* unsupported action */ } };
+    on('previoustrack', () => { if (!clickPlayerBar('.previous-button')) player.previousVideo?.(); });
+    on('nexttrack', () => { if (!clickPlayerBar('.next-button')) player.nextVideo?.(); });
+    on('play', () => player.playVideo?.());
+    on('pause', () => player.pauseVideo?.());
+    on('seekto', (d) => { if (Number.isFinite(d?.seekTime)) player.seekTo?.(d.seekTime, true); });
+    media.handlers = true;
+  }
+
+  /** "Artist • Album • 2020" (songs) or "Channel • 1.2M views • …" (videos). */
+  function trackText() {
+    const title = document.querySelector('ytmusic-player-bar .title')?.textContent?.trim() || '';
+    const parts = (document.querySelector('ytmusic-player-bar .byline')?.textContent || '')
+      .split('•').map((s) => s.trim()).filter(Boolean);
+    const isSong = parts.length >= 3 && /^\d{4}$/.test(parts[parts.length - 1]);
+    return { title, artist: parts[0] || '', album: isSong ? parts[1] : '' };
+  }
+
+  function artworkFor(url) {
+    if (!url) return [];
+    const m = url.match(/=w(\d+)-h(\d+)/);
+    const sizes = m ? `${m[1]}x${m[2]}` : undefined;
+    // A 512px copy too: some systems pick the closest size.
+    const small = m ? url.replace(/=w\d+-h\d+/, '=w512-h512') : null;
+    return [small && { src: small, sizes: '512x512', type: 'image/jpeg' }, { src: url, sizes, type: 'image/jpeg' }]
+      .filter(Boolean).map((a) => (a.sizes ? a : { src: a.src, type: a.type }));
+  }
+
+  function updateMediaSession(player, video) {
+    const ms = navigator.mediaSession;
+    if (!ms || typeof MediaMetadata === 'undefined' || !config.enabled || state.ad || !state.videoId) return;
+    if (!media.handlers) setMediaHandlers(player);
+
+    const info = trackText();
+    const cover = art.vid === state.videoId ? art.url : null;
+    if (info.title && cover) {
+      const key = `${state.videoId}|${info.title}|${cover}`;
+      // Re-apply if YouTube Music replaced the metadata (it uses the 16:9 video frame).
+      const current = ms.metadata?.artwork?.[ms.metadata.artwork.length - 1]?.src;
+      if (key !== media.key || current !== cover) {
+        try {
+          ms.metadata = new MediaMetadata({ ...info, artwork: artworkFor(cover) });
+          media.key = key;
+        } catch (e) { log('media metadata failed', e); }
+      }
+    }
+
+    if (video) {
+      try { ms.playbackState = video.paused ? 'paused' : 'playing'; } catch { /* ignore */ }
+      const d = video.duration;
+      const pos = video.currentTime;
+      if (Number.isFinite(d) && d > 0 && pos <= d && Math.abs(pos - media.lastPos) >= 0.5) {
+        media.lastPos = pos;
+        try { ms.setPositionState?.({ duration: d, position: pos, playbackRate: video.playbackRate || 1 }); } catch { /* ignore */ }
+      }
+    }
+  }
+
   function setRootClasses() {
     const root = document.documentElement;
     if (!root) return;
@@ -711,6 +785,7 @@
     watchPlayback(player); // first: playback recovery must never depend on cosmetics
     try { updateArt(player); } catch (e) { log('artwork update failed', e); }
     try { hidePremium(); observePopups(); } catch (e) { log('clean-up failed', e); }
+    try { updateMediaSession(player, player.querySelector('video')); } catch (e) { log('media session failed', e); }
     if (state.ticks % STATUS_EVERY_S === 0) sendStatus();
   }
 
@@ -769,7 +844,7 @@
   if (globalThis.__YTM_AO_TEST__) {
     globalThis.__YTM_AO_TEST__.api = {
       pickBestAudio, pickCheapestVideo, patchAny, trackInfo, LEVEL,
-      getConfig: () => config, applyConfig, effectiveLevel, artCandidates, artShape, hidePremium, isLight,
+      getConfig: () => config, applyConfig, effectiveLevel, artCandidates, artShape, hidePremium, isLight, trackText, artworkFor,
     };
   }
 })();
