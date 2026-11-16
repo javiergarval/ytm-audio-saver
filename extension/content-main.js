@@ -955,12 +955,15 @@
 
   /** Left/right edges of the real content column (where the cards start), in page coordinates. */
   function contentEdges(browse, rect) {
-    let left = null, right = null;
+    // Union of the visible rows: a single row can be narrower than the column
+    // (Library's filter chips sit next to a sort dropdown).
+    let left = null, right = null, seen = 0;
     for (const row of browse.querySelectorAll(CONTENT_ROWS)) {
       const b = row.getBoundingClientRect();
       if (b.width < 300 || b.height <= 0) continue;
-      left = b.left; right = b.right;
-      break;
+      left = left === null ? b.left : Math.min(left, b.left);
+      right = right === null ? b.right : Math.max(right, b.right);
+      if (++seen >= 6) break;
     }
     if (left === null) {
       const cs = getComputedStyle(browse);
