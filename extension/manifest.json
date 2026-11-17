@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "YTM Audio Saver",
-  "version": "1.0.16",
+  "version": "1.0.17",
   "description": "Audio-only YouTube Music on the free tier: blocks video streams, keeps the best free audio format, and gives YouTube Music a clean design.",
   "icons": {
     "48": "icons/icon.svg",

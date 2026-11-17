@@ -49,6 +49,23 @@ During ads, video is allowed and shown: ads are not touched.
 That's the only manual step. From then on the browser updates the extension by itself
 (it checks about once a day; to force it: `about:addons` → gear → **Check for Updates**).
 
+## Chrome
+
+Chrome needs Manifest V3, so the Chrome build swaps two pieces and shares the rest
+(content scripts, design, popup):
+
+- `chrome/background.js`: a service worker instead of a background page.
+- `chrome/rules.json`: a `declarativeNetRequest` rule blocks `mime=video/...`
+  requests from music.youtube.com; tabs that need video get a per-tab "allow" rule.
+
+Build it with `./scripts/build-chrome.sh` (output: `dist/chrome/`). Each release
+also carries `ytm-audio-saver-chrome-X.Y.Z.zip`.
+
+Install: unzip it to a folder you keep, open `chrome://extensions`, turn on
+**Developer mode**, click **Load unpacked** and pick the folder. Chrome does not
+update unpacked extensions: to update, replace the folder's contents with a newer
+zip and click the reload arrow on the extension card.
+
 ## How updates are published (automatic)
 
 `extension/` is the extension. Pushing a change with a new `"version"` in

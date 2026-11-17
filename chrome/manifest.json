@@ -1,0 +1,40 @@
+{
+  "manifest_version": 3,
+  "name": "YTM Audio Saver",
+  "version": "0.0.0",
+  "description": "Audio-only YouTube Music on the free tier: blocks video streams, keeps the best free audio format, and gives YouTube Music a clean design.",
+  "minimum_chrome_version": "121",
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "permissions": ["declarativeNetRequest", "declarativeNetRequestFeedback", "storage"],
+  "host_permissions": ["https://music.youtube.com/*"],
+  "background": { "service_worker": "background.js" },
+  "declarative_net_request": {
+    "rule_resources": [{ "id": "block-video", "enabled": true, "path": "rules.json" }]
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://music.youtube.com/*"],
+      "js": ["content-main.js"],
+      "run_at": "document_start",
+      "world": "MAIN",
+      "all_frames": false
+    },
+    {
+      "matches": ["https://music.youtube.com/*"],
+      "js": ["content-bridge.js"],
+      "css": ["content.css"],
+      "run_at": "document_start",
+      "all_frames": false
+    }
+  ],
+  "action": {
+    "default_title": "YTM Audio Saver",
+    "default_icon": { "16": "icons/icon-16.png", "32": "icons/icon-32.png" },
+    "default_popup": "popup/popup.html"
+  }
+}

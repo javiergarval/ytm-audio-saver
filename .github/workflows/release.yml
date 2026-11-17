@@ -6,13 +6,15 @@
 #   2. The signed .xpi is published as a GitHub Release (vX.Y.Z).
 #   3. updates.json is rewritten to point at it. Firefox/Zen read that file
 #      (manifest "update_url") and install the new version on their own.
+#   4. The Chrome build (scripts/build-chrome.sh) is attached to the same release
+#      as ytm-audio-saver-chrome-X.Y.Z.zip (Chrome: load unpacked, no signing).
 # Pushing without bumping the version does nothing (the release already exists).
 name: Sign & release
 
 on:
   push:
     branches: [main]
-    paths: ["extension/**"]
+    paths: ["extension/**", "chrome/**"]
   workflow_dispatch:
 
 permissions:
@@ -82,9 +84,12 @@ jobs:
           mv dist/*.xpi "dist/$XPI"
           HASH="sha256:$(sha256sum "dist/$XPI" | cut -d' ' -f1)"
 
-          gh release create "v$VERSION" "dist/$XPI" \
+          ./scripts/build-chrome.sh
+          ZIP="dist/ytm-audio-saver-chrome-$VERSION.zip"
+
+          gh release create "v$VERSION" "dist/$XPI" "$ZIP" \
             --title "v$VERSION" \
-            --notes "Signed by Mozilla (self-distributed). Installed copies update automatically; to install the first time, open the .xpi below in Firefox or Zen."
+            --notes "Firefox/Zen: the .xpi is signed by Mozilla (self-distributed); installed copies update automatically. Chrome: unzip the -chrome .zip and load the folder unpacked (chrome://extensions, Developer mode)."
 
           URL="https://github.com/$REPO/releases/download/v$VERSION/$XPI"
           jq -n --arg id "$ADDON_ID" --arg v "$VERSION" --arg url "$URL" --arg hash "$HASH" \
