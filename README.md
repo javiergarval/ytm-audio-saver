@@ -13,7 +13,7 @@ audio format, and shows an album-art player instead of the video. Works in Firef
 
 ### Design (popup → Advanced)
 - **Now playing** (default): a big now-playing hero at the top of Home, Explore and
-  Library: the cover sliding out of a spinning record, the title, previous/play/next/like
+  Library, and in place of the cover/video on the full player page: the cover sliding out of a spinning record, the title, previous/play/next/like
   and a clickable progress bar, over the colors of the cover (Ambient look). It is our own
   element, so YouTube's components are untouched; other pages keep their own headers.
 - **Ambient**: the window takes the colors of the song playing. A huge blurred

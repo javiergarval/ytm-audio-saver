@@ -888,7 +888,7 @@
     ? { eyebrow: 'Sonando ahora', prev: 'Anterior', next: 'Siguiente', play: 'Reproducir', pause: 'Pausar', like: 'Me gusta' }
     : { eyebrow: 'Now playing', prev: 'Previous', next: 'Next', play: 'Play', pause: 'Pause', like: 'Like' };
 
-  const hero = { el: null, parts: null, visible: false, height: 0, key: '' };
+  const hero = { el: null, parts: null, visible: false, mode: null, height: 0, key: '', pageObserved: null };
 
   function el(tag, cls, parent) {
     const node = document.createElement(tag);
@@ -978,14 +978,25 @@
     hero.parts = { title, sub, play, like, fill, bar, cur, dur };
   }
 
+  /**
+   * Where the hero goes, or null:
+   *  - 'player': the full player page is open; the hero replaces the cover/video
+   *    area on the left (the queue on the right stays YouTube's).
+   *  - 'browse': top of Home / Explore / Library.
+   */
   function heroWanted() {
     if (!designOn() || config.design !== 'nowplaying' || state.ad || !state.videoId) return null;
+    const open = document.querySelector('ytmusic-player-page[player-ui-state="PLAYER_PAGE_OPEN"]');
+    if (open) {
+      const panel = open.querySelector('#main-panel');
+      const r = panel?.getBoundingClientRect();
+      return r && r.width > 280 && r.height > 280 ? { mode: 'player', panel, rect: r } : null;
+    }
     if (!HERO_PATHS(location.pathname)) return null;
-    if (document.querySelector('ytmusic-player-page[player-ui-state="PLAYER_PAGE_OPEN"]')) return null;
     // YouTube keeps earlier pages in the DOM, hidden: use the one actually on screen.
     for (const browse of document.querySelectorAll('ytmusic-browse-response')) {
       const r = browse.getBoundingClientRect();
-      if (r.width > 300 && r.height > 0) return { browse, rect: r };
+      if (r.width > 300 && r.height > 0) return { mode: 'browse', browse, rect: r };
     }
     return null;
   }
@@ -1042,14 +1053,39 @@
     return { left: left + window.scrollX, width: Math.max(320, right - left) };
   }
 
-  function setHeroVisible(on) {
+  function setHeroVisible(on, mode = null) {
     hero.visible = on;
-    document.documentElement?.classList.toggle('ytm-ao-hero-on', on);
-    if (hero.el) hero.el.hidden = !on;
+    hero.mode = on ? mode : null;
+    const root = document.documentElement;
+    root?.classList.toggle('ytm-ao-hero-on', on && mode === 'browse');
+    root?.classList.toggle('ytm-ao-hero-player', on && mode === 'player');
+    if (hero.el) {
+      hero.el.hidden = !on;
+      hero.el.classList.toggle('ao-player', mode === 'player');
+      if (!on || mode !== 'player') hero.el.style.height = '';
+    }
+  }
+
+  // The player page slides open/closed: follow it for the length of the animation.
+  function watchPlayerPage() {
+    const page = document.querySelector('ytmusic-player-page');
+    if (!page || hero.pageObserved === page) return;
+    hero.pageObserved = page;
+    new MutationObserver(() => {
+      try { updateHero(); } catch { /* next tick retries */ }
+      const until = performance.now() + 800;
+      const follow = () => {
+        if (!hero.visible) return;
+        positionHero();
+        if (performance.now() < until) requestAnimationFrame(follow);
+      };
+      requestAnimationFrame(follow);
+    }).observe(page, { attributes: true, attributeFilter: ['player-ui-state'] });
   }
 
   /** Text, cover, play state and liked state: cheap, safe to call every tick. */
   function updateHero() {
+    watchPlayerPage();
     const want = heroWanted();
     if (!want) { if (hero.visible) setHeroVisible(false); return; }
     if (!hero.el) buildHero();
@@ -1062,6 +1098,8 @@
       p.title.textContent = info.title;
       p.sub.textContent = [info.artist, info.year].filter(Boolean).join(' · ');
       if (cover) hero.el.style.setProperty('--ao-cover', `url("${cover.replace(/"/g, '%22')}")`);
+      // 4:3 YouTube thumbnails carry black bars around a 16:9 frame: zoom past them.
+      hero.el.dataset.shape = cover ? art.shape : 'square';
     }
     const v = playerEl()?.querySelector('video');
     const playing = Boolean(v && !v.paused && !v.ended);
@@ -1073,7 +1111,7 @@
     p.like.classList.toggle('on', liked);
     p.like.setAttribute('aria-pressed', String(liked));
     updateHeroProgress();
-    if (!hero.visible) setHeroVisible(true);
+    if (!hero.visible || hero.mode !== want.mode) setHeroVisible(true, want.mode);
     positionHero(want);
   }
 
@@ -1095,6 +1133,18 @@
    */
   function positionHero(want = heroWanted()) {
     if (!hero.el || !hero.visible || !want) return;
+    if (want.mode !== hero.mode) { setHeroVisible(true, want.mode); }
+    if (want.mode === 'player') {
+      // Fixed over the player page's left panel (that page does not scroll).
+      const r = want.rect, s = hero.el.style;
+      s.left = `${Math.round(r.left)}px`;
+      s.top = `${Math.round(r.top)}px`;
+      s.width = `${Math.round(r.width)}px`;
+      s.height = `${Math.round(r.height)}px`;
+      s.setProperty('--ao-panel-h', `${Math.round(r.height)}px`);
+      clipHero();
+      return;
+    }
     const { browse, rect } = want;
     const { left, width } = contentEdges(browse, rect);
     // The content area can start behind the fixed top bar: never place the hero there.

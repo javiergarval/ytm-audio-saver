@@ -763,6 +763,40 @@ html.ytm-ao-np.ytm-ao-hero-on:not(.ytm-ao-ad) ytmusic-player-page[player-ui-stat
   visibility: hidden !important;
 }
 
+/* 4:3 YouTube thumbnails (hqdefault…) hold a 16:9 frame between black bars:
+   scale so the frame fills the square and the bars fall outside. */
+#ytm-ao-hero[data-shape="letterbox"] .ao-sleeve,
+#ytm-ao-hero[data-shape="letterbox"] .ao-vinyl::after {
+  background-size: auto 134%;
+}
+
+/* --- Full player page: the hero replaces the cover/video panel ----------- */
+#ytm-ao-hero.ao-player {
+  position: fixed;
+  box-sizing: border-box;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: clamp(18px, 3vh, 36px);
+  padding: 16px 24px;
+  text-align: center;
+}
+#ytm-ao-hero.ao-player .ao-disc {
+  /* Fill the panel, leaving ~340px for the text, buttons and progress bar. */
+  width: clamp(220px, min(90%, (var(--ao-panel-h, 760px) - 340px) * 1.36), 640px);
+}
+#ytm-ao-hero.ao-player .ao-meta { flex: none; width: 100%; max-width: 560px; }
+#ytm-ao-hero.ao-player .ao-title { font-size: clamp(30px, 3.4vw, 54px); margin: 8px 0 6px; }
+#ytm-ao-hero.ao-player .ao-sub { font-size: 17px; }
+#ytm-ao-hero.ao-player .ao-ctrl { justify-content: center; margin-top: 18px; }
+#ytm-ao-hero.ao-player :is(.ao-bar, .ao-times) { max-width: 480px; margin-left: auto; margin-right: auto; }
+#ytm-ao-hero.ao-player .ao-bar { margin-top: 20px; }
+/* YouTube's own cover/video stays in place (and keeps playing) underneath,
+   fully transparent (opacity also hides children that force visibility). */
+html.ytm-ao-hero-player:not(.ytm-ao-ad) ytmusic-player-page[player-ui-state="PLAYER_PAGE_OPEN"] #main-panel {
+  opacity: 0 !important;
+}
+
 /* Light mode */
 html.ytm-ao-light #ytm-ao-hero .ao-sleeve { box-shadow: 0 24px 60px rgb(0 0 0 / 0.25); }
 
