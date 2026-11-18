@@ -782,15 +782,10 @@ html.ytm-ao-np.ytm-ao-hero-on:not(.ytm-ao-ad) ytmusic-player-page[player-ui-stat
   text-align: center;
 }
 #ytm-ao-hero.ao-player .ao-disc {
-  /* Fill the panel, leaving ~340px for the text, buttons and progress bar. */
-  width: clamp(220px, min(90%, (var(--ao-panel-h, 760px) - 340px) * 1.36), 640px);
+  /* Only the cover and the record here: the player bar below has the controls. */
+  width: clamp(220px, min(94%, var(--ao-panel-h, 760px) * 0.86 * 1.36), 1100px);
 }
-#ytm-ao-hero.ao-player .ao-meta { flex: none; width: 100%; max-width: 560px; }
-#ytm-ao-hero.ao-player .ao-title { font-size: clamp(30px, 3.4vw, 54px); margin: 8px 0 6px; }
-#ytm-ao-hero.ao-player .ao-sub { font-size: 17px; }
-#ytm-ao-hero.ao-player .ao-ctrl { justify-content: center; margin-top: 18px; }
-#ytm-ao-hero.ao-player :is(.ao-bar, .ao-times) { max-width: 480px; margin-left: auto; margin-right: auto; }
-#ytm-ao-hero.ao-player .ao-bar { margin-top: 20px; }
+#ytm-ao-hero.ao-player .ao-meta { display: none; }
 /* YouTube's own cover/video stays in place (and keeps playing) underneath,
    fully transparent (opacity also hides children that force visibility). */
 html.ytm-ao-hero-player:not(.ytm-ao-ad) ytmusic-player-page[player-ui-state="PLAYER_PAGE_OPEN"] #main-panel {
