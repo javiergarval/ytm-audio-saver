@@ -827,6 +827,46 @@
   }
 
   // ---------------------------------------------------------------------------
+  // Cover as the tab icon
+  // Browsers show the tab icon next to the song in their own media controls
+  // (Zen's sidebar player, tab strips). Using the cover there makes those show
+  // the album art. YouTube's own icons are restored when nothing plays.
+  // ---------------------------------------------------------------------------
+  const fav = { url: undefined, original: null };
+
+  function setFavicon(url) {
+    const head = document.head;
+    if (!head || fav.url === url) return;
+    const links = [...head.querySelectorAll('link[rel~="icon"]')];
+    if (fav.original === null) {
+      fav.original = links.filter((l) => !l.dataset.ytmAo)
+        .map((l) => ({ rel: l.getAttribute('rel'), href: l.href, sizes: l.getAttribute('sizes'), type: l.getAttribute('type') }));
+    }
+    for (const l of links) l.remove();
+    const add = ({ rel, href, sizes, type }) => {
+      const l = document.createElement('link');
+      l.setAttribute('rel', rel);
+      if (sizes) l.setAttribute('sizes', sizes);
+      if (type) l.setAttribute('type', type);
+      l.dataset.ytmAo = '1';
+      l.href = href;
+      head.append(l);
+    };
+    if (url) add({ rel: 'icon', href: url, type: 'image/jpeg' });
+    else for (const o of fav.original) add(o);
+    fav.url = url;
+    // Zen re-reads the tab icon only when the media metadata changes, and the
+    // new icon takes a moment to load: re-send the metadata a little later.
+    if (url) for (const ms of [1500, 4000]) setTimeout(() => { media.key = null; }, ms);
+  }
+
+  function updateFavicon() {
+    const want = config.enabled && config.restyle && !state.ad && state.videoId && art.vid === state.videoId && art.url
+      ? smallArt(art.url, state.videoId) : null;
+    if (want || fav.url) setFavicon(want);
+  }
+
+  // ---------------------------------------------------------------------------
   // "Now playing" hero (design: nowplaying)
   // A big now-playing block at the top of Home / Explore / Library: the cover
   // sliding out of a spinning record, the title, controls and a progress bar.
@@ -1144,6 +1184,7 @@
     try { updateArt(player); applyAmbient(); } catch (e) { log('artwork update failed', e); }
     try { hidePremium(); observePopups(); } catch (e) { log('clean-up failed', e); }
     try { updateMediaSession(player, player.querySelector('video')); } catch (e) { log('media session failed', e); }
+    try { updateFavicon(); } catch (e) { log('favicon failed', e); }
     try { updateHero(); } catch (e) { log('hero failed', e); }
     if (state.ticks % STATUS_EVERY_S === 0) sendStatus();
   }
@@ -1202,6 +1243,7 @@
   // Test hook for the bundled Node test (absent in a real browser page).
   if (globalThis.__YTM_AO_TEST__) {
     globalThis.__YTM_AO_TEST__.api = {
+      setFavicon, updateFavicon,
       isErrorVisible,
       pickBestAudio, pickCheapestVideo, patchAny, trackInfo, LEVEL,
       getConfig: () => config, applyConfig, effectiveLevel, artCandidates, artShape, hidePremium, isLight, trackText, artworkFor, pickAccent, smallArt, updateHero, hero, fmtTime,

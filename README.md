@@ -49,6 +49,13 @@ During ads, video is allowed and shown: ads are not touched.
 That's the only manual step. From then on the browser updates the extension by itself
 (it checks about once a day; to force it: `about:addons` → gear → **Check for Updates**).
 
+## Zen: sidebar player with the cover
+
+While a song plays, the extension sets YouTube Music's tab icon to the cover
+(with "Album-art player" on). Zen's sidebar media player draws the tab icon, and
+`zen/userChrome.css` turns that player into an always-open card with the cover
+big on the left. Install steps are at the top of that file.
+
 ## Chrome
 
 Chrome needs Manifest V3, so the Chrome build swaps two pieces and shares the rest

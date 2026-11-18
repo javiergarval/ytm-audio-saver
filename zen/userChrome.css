@@ -1,0 +1,128 @@
+/*
+ * YTM Audio Saver: Zen sidebar media player, always open, with the cover
+ * ---------------------------------------------------------------------------
+ * For Zen Browser's media player at the bottom of the sidebar:
+ *   1. Cards stay expanded (title, artist, progress, buttons): no hover needed.
+ *   2. The cover is shown big on the left. Zen draws the tab's icon there, and
+ *      YTM Audio Saver (1.0.18+) sets YouTube Music's tab icon to the cover.
+ *      Other sites show their own icon in that spot.
+ *   3. The player stays visible even while its own tab is selected.
+ *
+ * Install: Zen > about:support > Profile Folder > "Show in Finder".
+ * Create a folder named "chrome" there and put this file in it as
+ * userChrome.css (or paste it at the end of the one you have). Restart Zen.
+ * If nothing changes: about:config >
+ * toolkit.legacyUserProfileCustomizations.stylesheets = true, restart again.
+ *
+ * Written against Zen's src/zen/media (November 2026). Zen may rename things
+ * in an update; if the player looks odd after one, remove this file.
+ */
+
+#zen-media-controls-toolbar {
+  --ytm-ao-art: 84px;
+}
+
+/* 1. Always expanded --------------------------------------------------------- */
+
+/* The bar normally keeps its collapsed height and the open card floats over
+   the tabs; let it take the room it needs instead. */
+#zen-media-controls-toolbar:not([hidden]) {
+  height: auto !important;
+}
+
+#zen-media-controls-toolbar .show-on-hover {
+  max-height: var(--zen-size-50) !important;
+  margin-bottom: 0 !important;
+  opacity: 1 !important;
+  transform: none !important;
+  pointer-events: auto !important;
+}
+
+#zen-media-controls-toolbar :is(.zen-media-info-container, .zen-media-progress-hbox) {
+  box-sizing: border-box !important;
+}
+
+#zen-media-controls-toolbar .zen-media-info-container {
+  padding: var(--zen-space-5) 0 var(--zen-space-5) var(--zen-space-5) !important;
+}
+
+#zen-media-controls-toolbar .zen-media-progress-hbox {
+  padding: 0 var(--zen-space-5) var(--zen-space-5) !important;
+}
+
+/* Several players: list them instead of stacking them behind each other. */
+#zen-media-controls-toolbar .zen-media-card:not([zen-removing]) {
+  transform: none !important;
+  opacity: 1 !important;
+}
+
+/* Long titles scroll all the time, not only on hover. */
+#zen-media-controls-toolbar .zen-media-info-vbox label[overflow] {
+  animation: zen-back-and-forth-text 10s infinite ease-in-out;
+}
+
+/* 2. Big cover on the left --------------------------------------------------- */
+
+/* The animated notes would sit on top of the cover. */
+#zen-media-controls-toolbar .zen-media-notes {
+  display: none !important;
+}
+
+/* Zen hides the icon button when the row is narrow and makes the row a
+   container (which would trap the absolute positioning below). */
+#zen-media-controls-toolbar .zen-media-controls-hbox {
+  container: none !important;
+}
+
+#zen-media-controls-toolbar .zen-media-main-vbox {
+  box-sizing: border-box !important;
+  min-height: calc(var(--ytm-ao-art) + var(--zen-space-4) * 2);
+  padding-inline-start: calc(var(--ytm-ao-art) + var(--zen-space-6)) !important;
+}
+
+#zen-media-controls-toolbar .zen-media-focus-button {
+  display: flex !important;
+  position: absolute !important;
+  inset-inline-start: var(--zen-space-6);
+  top: 50%;
+  transform: translateY(-50%) !important;
+  width: var(--ytm-ao-art) !important;
+  height: var(--ytm-ao-art) !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  opacity: 1 !important;
+  border-radius: 10px !important;
+  overflow: hidden !important;
+
+  & .toolbarbutton-icon {
+    width: 100% !important;
+    height: 100% !important;
+    padding: 0 !important;
+    border-radius: 10px;
+    object-fit: cover;
+  }
+}
+
+/* 3. Stay visible on the media's own tab ------------------------------------- */
+/* Delete this block if you prefer Zen's default (hidden while on that tab). */
+
+#zen-media-controls-toolbar[hidden]:has(.zen-media-card:not([zen-removing])) {
+  display: flex !important;
+  flex-direction: column-reverse;
+  gap: var(--zen-media-stack-gap);
+  position: relative;
+  z-index: 2;
+}
+
+#zen-media-controls-toolbar:has(.zen-media-card:not([zen-removing])) {
+  opacity: 1 !important;
+}
+
+#zen-media-controls-toolbar .zen-media-card[hidden],
+#zen-media-controls-toolbar .zen-media-card[zen-hiding] {
+  display: flex !important;
+  translate: none !important;
+  opacity: 1 !important;
+  filter: none !important;
+  pointer-events: auto !important;
+}
