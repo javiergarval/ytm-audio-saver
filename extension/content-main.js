@@ -834,19 +834,11 @@
   // it is positioned over the top of the page, and the page content is pushed
   // down by the same height with one CSS variable.
   // ---------------------------------------------------------------------------
-  const SVG_NS = 'http://www.w3.org/2000/svg';
-  const ICONS = {
-    prev: 'M6 6h2v12H6zm3.5 6L18 6v12z',
-    play: 'M8 5v14l11-7z',
-    pause: 'M7 5h4v14H7zm6 0h4v14h-4z',
-    next: 'M16 6h2v12h-2zM6 18l8.5-6L6 6z',
-    like: 'M2 21h4V9H2zm20-11a2 2 0 00-2-2h-6.3l1-4.6V3a1.5 1.5 0 00-.4-1L13 1 6.6 7.4A2 2 0 006 9v10a2 2 0 002 2h9a2 2 0 001.8-1.2l3-7.1A2 2 0 0022 12z',
-  };
   const HERO_PATHS = (path) => path === '/' || path === '/explore' || path.startsWith('/library');
   const es = /^es\b/i.test(document.documentElement?.lang || navigator.language || '');
   const T = es
-    ? { eyebrow: 'Sonando ahora', prev: 'Anterior', next: 'Siguiente', play: 'Reproducir', pause: 'Pausar', like: 'Me gusta' }
-    : { eyebrow: 'Now playing', prev: 'Previous', next: 'Next', play: 'Play', pause: 'Pause', like: 'Like' };
+    ? { eyebrow: 'Sonando ahora' }
+    : { eyebrow: 'Now playing' };
 
   const hero = { el: null, parts: null, visible: false, mode: null, height: 0, key: '', pageObserved: null };
 
@@ -857,27 +849,7 @@
     return node;
   }
 
-  function iconButton(name, label, cls, parent) {
-    const b = el('button', `ao-btn ${cls || ''}`.trim(), parent);
-    b.type = 'button';
-    b.setAttribute('aria-label', label);
-    b.title = label;
-    const svg = document.createElementNS(SVG_NS, 'svg');
-    svg.setAttribute('viewBox', '0 0 24 24');
-    svg.setAttribute('aria-hidden', 'true');
-    const path = document.createElementNS(SVG_NS, 'path');
-    path.setAttribute('d', ICONS[name]);
-    svg.appendChild(path);
-    b.appendChild(svg);
-    b._path = path;
-    return b;
-  }
 
-  const fmtTime = (s) => {
-    if (!Number.isFinite(s) || s < 0) return '0:00';
-    const m = Math.floor(s / 60), r = Math.floor(s % 60);
-    return `${m}:${String(r).padStart(2, '0')}`;
-  };
 
   function playerEl() { return document.getElementById('movie_player'); }
 
@@ -892,50 +864,10 @@
     el('div', 'ao-eyebrow', meta).textContent = T.eyebrow;
     const title = el('div', 'ao-title', meta);
     const sub = el('div', 'ao-sub', meta);
-    const ctrl = el('div', 'ao-ctrl', meta);
-    const prev = iconButton('prev', T.prev, '', ctrl);
-    const play = iconButton('pause', T.pause, 'ao-play', ctrl);
-    const next = iconButton('next', T.next, '', ctrl);
-    const like = iconButton('like', T.like, 'ao-like', ctrl);
-    const bar = el('div', 'ao-bar', meta);
-    bar.setAttribute('role', 'slider');
-    bar.setAttribute('aria-label', 'Progress');
-    bar.tabIndex = 0;
-    const fill = el('div', 'ao-fill', bar);
-    const times = el('div', 'ao-times', meta);
-    const cur = el('span', '', times);
-    const dur = el('span', '', times);
-
-    prev.addEventListener('click', () => { if (!clickPlayerBar('.previous-button')) playerEl()?.previousVideo?.(); });
-    next.addEventListener('click', () => { if (!clickPlayerBar('.next-button')) playerEl()?.nextVideo?.(); });
-    play.addEventListener('click', () => {
-      if (clickPlayerBar('#play-pause-button')) return;
-      const v = playerEl()?.querySelector('video');
-      if (v) (v.paused ? playerEl().playVideo?.() : playerEl().pauseVideo?.());
-    });
-    like.addEventListener('click', () => {
-      const btn = document.querySelector('ytmusic-player-bar ytmusic-like-button-renderer button');
-      btn?.click();
-      setTimeout(updateHero, 250);
-    });
-    const seekFromEvent = (e) => {
-      const v = playerEl()?.querySelector('video');
-      if (!v || !Number.isFinite(v.duration)) return;
-      const r = bar.getBoundingClientRect();
-      const frac = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
-      playerEl()?.seekTo?.(frac * v.duration, true);
-    };
-    bar.addEventListener('click', seekFromEvent);
-    bar.addEventListener('keydown', (e) => {
-      const v = playerEl()?.querySelector('video');
-      if (!v) return;
-      const step = e.key === 'ArrowRight' ? 5 : e.key === 'ArrowLeft' ? -5 : 0;
-      if (step) { e.preventDefault(); playerEl()?.seekTo?.(Math.max(0, v.currentTime + step), true); }
-    });
 
     document.body.appendChild(root);
     hero.el = root;
-    hero.parts = { title, sub, play, like, fill, bar, cur, dur };
+    hero.parts = { title, sub };
   }
 
   /**
@@ -1064,26 +996,8 @@
     const v = playerEl()?.querySelector('video');
     const playing = Boolean(v && !v.paused && !v.ended);
     hero.el.classList.toggle('playing', playing);
-    p.play._path.setAttribute('d', playing ? ICONS.pause : ICONS.play);
-    p.play.setAttribute('aria-label', playing ? T.pause : T.play);
-    p.play.title = playing ? T.pause : T.play;
-    const liked = document.querySelector('ytmusic-player-bar ytmusic-like-button-renderer')?.getAttribute('like-status') === 'LIKE';
-    p.like.classList.toggle('on', liked);
-    p.like.setAttribute('aria-pressed', String(liked));
-    updateHeroProgress();
     if (!hero.visible || hero.mode !== want.mode) setHeroVisible(true, want.mode);
     positionHero(want);
-  }
-
-  function updateHeroProgress() {
-    if (!hero.el || !hero.visible) return;
-    const v = playerEl()?.querySelector('video');
-    const d = v?.duration, c = v?.currentTime;
-    const frac = Number.isFinite(d) && d > 0 ? Math.min(1, c / d) : 0;
-    hero.parts.fill.style.width = `${(frac * 100).toFixed(2)}%`;
-    hero.parts.cur.textContent = fmtTime(c);
-    hero.parts.dur.textContent = fmtTime(d);
-    hero.parts.bar.setAttribute('aria-valuenow', String(Math.round(frac * 100)));
   }
 
   /**
@@ -1141,7 +1055,6 @@
 
   window.addEventListener('scroll', () => { if (hero.visible) requestAnimationFrame(clipHero); }, { passive: true });
   window.addEventListener('resize', () => { if (hero.visible) requestAnimationFrame(() => positionHero()); }, { passive: true });
-  document.addEventListener('timeupdate', () => updateHeroProgress(), true);
   document.addEventListener('click', () => { if (hero.visible) setTimeout(clipHero, 60); }, true);
 
   function setRootClasses() {
@@ -1254,7 +1167,7 @@
     globalThis.__YTM_AO_TEST__.api = {
       isErrorVisible,
       pickBestAudio, pickCheapestVideo, patchAny, trackInfo, LEVEL,
-      getConfig: () => config, applyConfig, effectiveLevel, artCandidates, artShape, hidePremium, isLight, trackText, artworkFor, pickAccent, smallArt, updateHero, hero, fmtTime,
+      getConfig: () => config, applyConfig, effectiveLevel, artCandidates, artShape, hidePremium, isLight, trackText, artworkFor, pickAccent, smallArt, updateHero, hero,
     };
   }
 })();

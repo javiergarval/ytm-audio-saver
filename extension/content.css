@@ -701,58 +701,6 @@ html.ytm-ao-clean.ytm-ao-light tp-yt-paper-dialog {
 }
 #ytm-ao-hero .ao-sub { font-size: 19px; color: color-mix(in srgb, var(--ao-text) 80%, transparent); }
 
-/* Controls */
-#ytm-ao-hero .ao-ctrl { display: flex; align-items: center; gap: 14px; margin-top: 24px; }
-#ytm-ao-hero .ao-btn {
-  width: 44px;
-  height: 44px;
-  display: grid;
-  place-items: center;
-  border: 0;
-  border-radius: 50%;
-  background: transparent;
-  color: var(--ao-text);
-  cursor: pointer;
-  transition: background-color 0.15s, transform 0.1s;
-}
-#ytm-ao-hero .ao-btn svg { width: 28px; height: 28px; fill: currentColor; }
-#ytm-ao-hero .ao-btn:hover { background: var(--ao-glass, var(--ao-hover)); }
-#ytm-ao-hero .ao-btn:active { transform: scale(0.94); }
-#ytm-ao-hero .ao-btn:focus-visible { outline: 2px solid var(--ao-accent); outline-offset: 2px; }
-#ytm-ao-hero .ao-play { width: 64px; height: 64px; background: var(--ao-text); color: var(--ao-bg); }
-#ytm-ao-hero .ao-play svg { width: 32px; height: 32px; }
-#ytm-ao-hero .ao-play:hover { background: var(--ao-text); transform: scale(1.04); }
-#ytm-ao-hero .ao-like svg { width: 22px; height: 22px; }
-#ytm-ao-hero .ao-like.on { color: var(--ao-accent); }
-
-/* Progress */
-#ytm-ao-hero .ao-bar {
-  position: relative;
-  height: 4px;
-  margin-top: 24px;
-  max-width: 440px;
-  border-radius: 2px;
-  background: color-mix(in srgb, var(--ao-text) 18%, transparent);
-  cursor: pointer;
-}
-#ytm-ao-hero .ao-bar::after { content: ""; position: absolute; inset: -8px 0; } /* bigger click area */
-#ytm-ao-hero .ao-fill {
-  position: absolute;
-  inset: 0 auto 0 0;
-  border-radius: 2px;
-  background: var(--ao-accent);
-  box-shadow: 0 0 12px color-mix(in srgb, var(--ao-accent) 60%, transparent);
-}
-#ytm-ao-hero .ao-bar:focus-visible { outline: 2px solid var(--ao-accent); outline-offset: 6px; }
-#ytm-ao-hero .ao-times {
-  display: flex;
-  justify-content: space-between;
-  max-width: 440px;
-  margin-top: 8px;
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-  color: color-mix(in srgb, var(--ao-text) 65%, transparent);
-}
 
 /* Reserve the hero's space at the top of the page content. */
 html.ytm-ao-np.ytm-ao-hero-on ytmusic-browse-response {
