@@ -760,3 +760,30 @@ html.ytm-ao-light #ytm-ao-hero .ao-sleeve { box-shadow: 0 24px 60px rgb(0 0 0 / 
 @media (prefers-reduced-motion: reduce) {
   #ytm-ao-hero.playing .ao-vinyl { animation: none; }
 }
+
+/* ==========================================================================
+   Queue: follow the playing playlist (button added next to "Guardar")
+   ========================================================================== */
+#ytm-ao-follow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  margin-right: 8px;
+  padding: 0 14px 0 10px;
+  border: 1px solid rgb(255 255 255 / 0.2);
+  border-radius: 18px;
+  background: transparent;
+  color: inherit;
+  font: 500 14px/1 Roboto, Arial, sans-serif;
+  cursor: pointer;
+  white-space: nowrap;
+}
+#ytm-ao-follow[hidden] { display: none; }
+#ytm-ao-follow:hover { background: rgb(255 255 255 / 0.1); }
+#ytm-ao-follow svg { width: 20px; height: 20px; fill: currentColor; }
+#ytm-ao-follow.on svg { fill: var(--ao-accent, #fff); }
+html.ytm-ao-light #ytm-ao-follow { border-color: rgb(0 0 0 / 0.2); }
+html.ytm-ao-light #ytm-ao-follow:hover { background: rgb(0 0 0 / 0.06); }
+ytmusic-queue-header-renderer .subtitle.ytm-ao-link { cursor: pointer; }
+ytmusic-queue-header-renderer .subtitle.ytm-ao-link:hover { text-decoration: underline; }

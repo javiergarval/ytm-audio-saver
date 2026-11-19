@@ -1090,6 +1090,104 @@
   // ---------------------------------------------------------------------------
   // 4. Main loop + SPA hooks
   // ---------------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
+  // Follow the playlist that is playing, from the queue ("A continuación")
+  // YouTube Music only offers "Guardar" there, which makes a copy. Following
+  // (saving the playlist itself to the library) needs its own page. This adds
+  // a follow button next to "Guardar" and makes the playlist name a link.
+  // Both use YouTube Music's own actions: the same "like" request its bookmark
+  // button sends, and its in-app navigation (the music keeps playing).
+  // ---------------------------------------------------------------------------
+  const FOLLOWABLE = /^(PL[\w-]{10,}|RDCLAK5uy_[\w-]+|OLAK5uy_[\w-]+)$/;
+  const BOOKMARK = 'M17 3H7c-1.1 0-1.99.9-1.99 2L5 21l7-3 7 3V5c0-1.1-.9-2-2-2z';
+  const BOOKMARK_BORDER = 'M17 3H7c-1.1 0-1.99.9-1.99 2L5 21l7-3 7 3V5c0-1.1-.9-2-2-2zm0 15l-5-2.18L7 18V5h10v13z';
+  const esUI = /^es\b/i.test(document.documentElement?.lang || navigator.language || '');
+  const FT = esUI
+    ? { follow: 'Seguir', following: 'Siguiendo', followTip: 'Guardar esta lista en tu biblioteca (se actualiza sola)', unfollowTip: 'Quitar de tu biblioteca', open: 'Abrir la lista' }
+    : { follow: 'Follow', following: 'Following', followTip: 'Save this playlist to your library (stays up to date)', unfollowTip: 'Remove from your library', open: 'Open the playlist' };
+  const follow = { btn: null, path: null, label: null, override: new Map(), linked: null };
+
+  function queueListId() {
+    if (location.pathname !== '/watch') return null;
+    const id = new URLSearchParams(location.search).get('list');
+    return id && FOLLOWABLE.test(id) ? id : null;
+  }
+
+  /** Saved playlists are listed in the side menu (browseId "VL" + id). */
+  function inLibrary(id) {
+    if (follow.override.has(id)) return follow.override.get(id);
+    for (const g of document.querySelectorAll('ytmusic-guide-entry-renderer')) {
+      const bid = g.data?.navigationEndpoint?.browseEndpoint?.browseId;
+      if (bid === `VL${id}`) return true;
+    }
+    return false;
+  }
+
+  function ytAction(endpoint) {
+    document.querySelector('ytmusic-app')?.dispatchEvent(new CustomEvent('yt-action', {
+      bubbles: true, composed: true,
+      detail: { actionName: 'yt-service-request', returnValue: [], args: [{ data: {} }, endpoint], optionalAction: false },
+    }));
+  }
+
+  function openPlaylist(id) {
+    document.querySelector('ytmusic-app')?.dispatchEvent(new CustomEvent('yt-navigate', {
+      bubbles: true, composed: true, detail: { endpoint: { browseEndpoint: { browseId: `VL${id}` } } },
+    }));
+  }
+
+  function buildFollowButton() {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.id = 'ytm-ao-follow';
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('aria-hidden', 'true');
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    svg.appendChild(path);
+    const label = document.createElement('span');
+    b.append(svg, label);
+    b.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const id = queueListId();
+      if (!id) return;
+      const on = !inLibrary(id);
+      ytAction({ likeEndpoint: { status: on ? 'LIKE' : 'INDIFFERENT', target: { playlistId: id } } });
+      follow.override.set(id, on);
+      updateFollow();
+    });
+    follow.btn = b;
+    follow.path = path;
+    follow.label = label;
+  }
+
+  function updateFollow() {
+    const id = config.enabled ? queueListId() : null;
+    const header = document.querySelector('ytmusic-queue-header-renderer');
+    const buttons = header?.querySelector('#buttons');
+    if (!id || !buttons) { if (follow.btn) follow.btn.hidden = true; return; }
+    if (!follow.btn) buildFollowButton();
+    if (follow.btn.parentElement !== buttons) buttons.prepend(follow.btn);
+    const on = inLibrary(id);
+    follow.btn.hidden = false;
+    follow.btn.classList.toggle('on', on);
+    follow.btn.setAttribute('aria-pressed', String(on));
+    follow.btn.title = on ? FT.unfollowTip : FT.followTip;
+    follow.path.setAttribute('d', on ? BOOKMARK : BOOKMARK_BORDER);
+    follow.label.textContent = on ? FT.following : FT.follow;
+
+    // The playlist name opens its page.
+    const name = header.querySelector('.subtitle');
+    if (name && follow.linked !== name) {
+      follow.linked = name;
+      name.classList.add('ytm-ao-link');
+      name.title = FT.open;
+      name.addEventListener('click', () => { const lid = queueListId(); if (lid) openPlaylist(lid); });
+    }
+    name?.classList.toggle('ytm-ao-link', true);
+  }
+
   function tick() {
     state.ticks++;
     setRootClasses();
@@ -1108,6 +1206,7 @@
     try { hidePremium(); observePopups(); } catch (e) { log('clean-up failed', e); }
     try { updateMediaSession(player, player.querySelector('video')); } catch (e) { log('media session failed', e); }
     try { updateHero(); } catch (e) { log('hero failed', e); }
+    try { updateFollow(); } catch (e) { log('follow failed', e); }
     if (state.ticks % STATUS_EVERY_S === 0) sendStatus();
   }
 

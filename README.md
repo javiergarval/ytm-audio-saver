@@ -49,6 +49,13 @@ During ads, video is allowed and shown: ads are not touched.
 That's the only manual step. From then on the browser updates the extension by itself
 (it checks about once a day; to force it: `about:addons` → gear → **Check for Updates**).
 
+## Follow the playing playlist
+
+In the queue ("A continuación"), YouTube Music only offers "Guardar", which makes
+a copy. The extension adds a **Seguir / Siguiendo** button next to it that saves
+the playlist itself to your library (it keeps updating), and makes the playlist
+name a link to its page. Mixes and radios can't be followed, so they get no button.
+
 ## Chrome
 
 Chrome needs Manifest V3, so the Chrome build swaps two pieces and shares the rest
