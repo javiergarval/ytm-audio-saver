@@ -490,9 +490,14 @@ html.ytm-ao-ambient.ytm-ao-ambient ytmusic-navigation-button-renderer button {
 
 /* ---- Player bar: a floating glass capsule -------------------------------- */
 html.ytm-ao-ambient.ytm-ao-ambient ytmusic-player-bar {
+  /* left + right (not a width) so the 1px border can't push the right edge out;
+     the right controls sit 4px further in than the left ones, hence 12/8. */
+  box-sizing: border-box !important;
   left: 16px !important;
+  right: 16px !important;
   bottom: 14px !important;
-  width: calc(100% - 32px) !important;
+  width: auto !important;
+  padding-inline: 12px 8px !important;
   border-radius: 22px !important;
   background: var(--ao-glass-strong) !important;
   backdrop-filter: blur(30px) saturate(1.6);
@@ -501,7 +506,15 @@ html.ytm-ao-ambient.ytm-ao-ambient ytmusic-player-bar {
 }
 html.ytm-ao-ambient.ytm-ao-ambient ytmusic-player-bar #progress-bar {
   left: 24px !important;
-  width: calc(100% - 48px) !important;
+  right: 24px !important;
+  width: auto !important;
+}
+/* YouTube's slider adds a 16px left margin on top of a full width, which pushed
+   the track 32px off-centre (measured on the live page). */
+html.ytm-ao-ambient.ytm-ao-ambient ytmusic-player-bar #progress-bar #sliderContainer {
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+  width: 100% !important;
 }
 html.ytm-ao-ambient.ytm-ao-ambient ytmusic-player-bar #progress-bar #progressContainer { border-radius: 2px; }
 html.ytm-ao-ambient.ytm-ao-ambient ytmusic-player-bar #progress-bar #primaryProgress {
